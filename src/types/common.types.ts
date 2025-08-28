@@ -1,5 +1,4 @@
 import { Request } from 'express';
-import { Document } from 'mongoose';
 
 export interface ApiResponse<T = any> {
   success: boolean;
