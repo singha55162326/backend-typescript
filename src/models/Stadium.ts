@@ -72,7 +72,7 @@ interface ISpecialDate {
   reason?: string;
 }
 
-interface IField {
+export interface IField {
   name: string;
   fieldType: '11v11' | '7v7' | '5v5' | 'futsal' | 'training';
   surfaceType: 'natural_grass' | 'artificial_grass' | 'indoor';
