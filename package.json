@@ -5,9 +5,9 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc",
-     "dev": "npx nodemon src/server.ts",
-  "dev:ts": "npx ts-node src/server.ts",
-  "start": "node dist/server.js"
+   "start": "node dist/server.js",
+    "dev": "nodemon src/server.ts",
+    "dev:ts": "ts-node src/server.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "lint": "eslint src/**/*.ts",
