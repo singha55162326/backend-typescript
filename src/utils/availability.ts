@@ -18,6 +18,14 @@ interface IAvailableReferee {
   currency: string;
 }
 
+// Define interface for the actual slot structure from field data
+interface IFieldTimeSlot {
+  startTime: string;
+  endTime: string;
+  isAvailable: boolean;
+  specialRate?: number; // Optional special rate
+}
+
 class AvailabilityService {
   static async checkFieldAvailability(
     fieldId: string,
@@ -80,7 +88,7 @@ class AvailabilityService {
     }).select('startTime endTime');
 
     // Filter available slots
-    for (const slot of timeSlots) {
+    for (const slot of timeSlots as IFieldTimeSlot[]) {
       if (!slot.isAvailable) continue;
 
       const isSlotAvailable = !existingBookings.some(booking => 
@@ -107,7 +115,7 @@ class AvailabilityService {
     endTime: string
   ): Promise<IAvailableReferee[]> {
     const dayOfWeek = moment(date).day();
-    
+        
     return stadiumStaff.filter(staff => {
       if (staff.role !== 'referee' || staff.status !== 'active') {
         return false;

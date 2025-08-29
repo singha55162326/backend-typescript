@@ -11,7 +11,7 @@ export const calculateHourlyRate = (field: IField, date: Date, time: string): nu
       timeMinutes >= convertTimeToMinutes(tier.startTime) &&
       timeMinutes < convertTimeToMinutes(tier.endTime)
     );
-    
+        
     if (activeTier) {
       return activeTier.hourlyRate;
     }
@@ -39,19 +39,18 @@ export const getPricingForDateTime = (field: IField, date: Date, startTime: stri
     const activeTiers = field.pricing.pricingTiers.filter((tier: { isActive: any; daysOfWeek: number[]; }) => 
       tier.isActive && tier.daysOfWeek.includes(dayOfWeek)
     );
-    
+        
     if (activeTiers.length > 0) {
       // คำนวณราคาตามช่วงเวลา
       for (let minute = startMinutes; minute < endMinutes; minute += 30) {
-        const currentTime = convertMinutesToTime(minute);
         const tier = activeTiers.find((t: { startTime: string; endTime: string; }) => 
-          minute >= convertTimeToMinutes(t.startTime) && 
+          minute >= convertTimeToMinutes(t.startTime) &&
           minute < convertTimeToMinutes(t.endTime)
         );
-        
+                
         const rate = tier ? tier.hourlyRate : field.pricing.baseHourlyRate;
         totalPrice += rate / 2; // 30 minutes increment
-        
+                
         if (tier && !appliedTier) {
           appliedTier = tier;
         }
@@ -76,11 +75,6 @@ const convertTimeToMinutes = (time: string): number => {
   return hours * 60 + minutes;
 };
 
-const convertMinutesToTime = (minutes: number): string => {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
-};
 
 export interface IPricingTier {
   name: string;
