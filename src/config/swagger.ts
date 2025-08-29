@@ -17,7 +17,7 @@ const options: swaggerJsdoc.Options = {
     },
     servers: [
       {
-        url: 'http://localhost:5000/api',
+        url: 'https://api-pos.edl.com.la/api',
         description: 'Development Server',
       },
     ],
