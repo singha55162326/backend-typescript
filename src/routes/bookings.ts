@@ -816,10 +816,14 @@ router.get('/:bookingId', authenticateToken, async (req: Request, res: Response,
 
     
     // Authorization: Only owner or admin can view
-    if (booking.userId.toString() !== req.user?.userId && req.user?.role !== 'stadium_owner') {
-      res.status(403).json({ success: false, message: 'Access denied' });
-      return;
-    }
+   if (
+  booking.userId.toString() !== req.user?.userId &&
+  req.user?.role !== 'stadium_owner' &&
+  req.user?.role !== 'superadmin'
+) {
+  res.status(403).json({ success: false, message: 'Access denied' });
+  return;
+}
 
     res.json({ success: true, data: booking });
     return;
