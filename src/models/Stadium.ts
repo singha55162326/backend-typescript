@@ -48,9 +48,20 @@ interface ISeasonalRate {
   rate: number;
 }
 
+interface IPricingTier {
+  name: string;
+  description?: string;
+  startTime: string;
+  endTime: string;
+  daysOfWeek: number[];
+  hourlyRate: number;
+  isActive: boolean;
+}
+
 interface IFieldPricing {
   baseHourlyRate: number;
   currency: string;
+  pricingTiers?: IPricingTier[];
   seasonalRates?: ISeasonalRate[];
 }
 
@@ -58,7 +69,8 @@ interface ITimeSlot {
   startTime: string;
   endTime: string;
   isAvailable?: boolean;
-  specialRate?: number;
+  pricingTier?: string;
+  hourlyRate?: number;
 }
 
 interface IDaySchedule {
@@ -72,7 +84,7 @@ interface ISpecialDate {
   reason?: string;
 }
 
-interface IField {
+export  interface IField {
   name: string;
   fieldType: '11v11' | '7v7' | '5v5' | 'futsal' | 'training';
   surfaceType: 'natural_grass' | 'artificial_grass' | 'indoor';
@@ -93,7 +105,7 @@ interface IAddress {
   postalCode?: string;
   coordinates?: {
     type: 'Point';
-    coordinates: [number, number]; // [longitude, latitude]
+    coordinates: [number, number];
   };
 }
 
@@ -128,6 +140,39 @@ export interface IStadium extends Document {
   fields?: IField[];
   stats?: IStadiumStats;
 }
+
+const pricingTierSchema = new Schema<IPricingTier>({
+  name: {
+    type: String,
+    required: true,
+    enum: ['morning', 'afternoon', 'evening', 'weekend', 'custom']
+  },
+  description: String,
+  startTime: {
+    type: String,
+    required: true,
+    match: /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
+  },
+  endTime: {
+    type: String,
+    required: true,
+    match: /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
+  },
+  daysOfWeek: [{
+    type: Number,
+    min: 0,
+    max: 6,
+    required: true
+  }],
+  hourlyRate: {
+    type: Number,
+    required: true
+  },
+  isActive: {
+    type: Boolean,
+    default: true
+  }
+});
 
 const stadiumStaffSchema = new Schema<IStaff>({
   name: {
@@ -164,8 +209,8 @@ const stadiumStaffSchema = new Schema<IStaff>({
   }],
   rates: {
     hourlyRate: {
-      type: Number,
-      required: true
+    type: Number,
+    required: true
     },
     currency: {
       type: String,
@@ -216,6 +261,7 @@ const fieldSchema = new Schema<IField>({
       type: String,
       default: 'LAK'
     },
+    pricingTiers: [pricingTierSchema],
     seasonalRates: [{
       season: String,
       startDate: Date,
@@ -280,7 +326,7 @@ const stadiumSchema = new Schema<IStadium>({
       default: 'Laos'
     },
     postalCode: String,
-     coordinates: {
+    coordinates: {
       type: {
         type: String,
         enum: ['Point'],
@@ -288,14 +334,13 @@ const stadiumSchema = new Schema<IStadium>({
         required: true
       },
       coordinates: {
-        type: [Number], // [longitude, latitude]
+        type: [Number],
         required: true,
         validate: {
           validator: function(coords: number[]) {
-            // More flexible validation for Laos coordinates
             return coords.length === 2 && 
-                   coords[0] >= 100 && coords[0] <= 108 && // Longitude range for Laos
-                   coords[1] >= 13 && coords[1] <= 23;     // Latitude range for Laos
+                   coords[0] >= 100 && coords[0] <= 108 &&
+                   coords[1] >= 13 && coords[1] <= 23;
           },
           message: 'Coordinates must be valid Laos coordinates [longitude between 100-108, latitude between 13-23]'
         }
