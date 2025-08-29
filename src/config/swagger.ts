@@ -17,8 +17,12 @@ const options: swaggerJsdoc.Options = {
     },
     servers: [
       {
-        url: 'http://localhost:5000',
-        description: 'Development server',
+        url: process.env.NODE_ENV === 'production'
+          ? 'https://api-pos.edl.com.la/api'
+          : 'http://localhost:5000/api',
+        description: process.env.NODE_ENV === 'production'
+          ? 'Production Server'
+          : 'Development Server',
       },
     ],
     components: {
@@ -978,8 +982,8 @@ const options: swaggerJsdoc.Options = {
 
   // Scan route files for JSDoc comments
   apis: [
-    path.join(__dirname, '../routes/*.ts'),
-    path.join(__dirname, '../models/*.ts'),
+    path.join(__dirname, '../routes/*.' + (process.env.NODE_ENV === 'production' ? 'js' : 'ts')),
+    path.join(__dirname, '../models/*.' + (process.env.NODE_ENV === 'production' ? 'js' : 'ts')),
   ],
 };
 
