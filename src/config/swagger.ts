@@ -16,10 +16,14 @@ const options: swaggerJsdoc.Options = {
       },
     },
     servers: [
-      {
-        url: 'https://api-pos.edl.com.la/api',
-        description: 'Development Server',
-      },
+    {
+    url: 'https://api-pos.edl.com.la/api',
+    description: 'Production Server',
+  },
+  {
+    url: 'http://localhost:5000/api',
+    description: 'Local Development',
+  },
     ],
     components: {
       securitySchemes: {
