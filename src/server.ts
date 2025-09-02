@@ -41,6 +41,7 @@ app.use(helmet());
 app.use(cors({
   origin: [
     'http://localhost:3000',
+    'http://localhost:8081',
     'http://localhost:8080' // Vite dev server
   ],
   credentials: true,
