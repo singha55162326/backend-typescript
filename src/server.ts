@@ -46,13 +46,14 @@ app.use(cors({
   credentials: true,
 }));
 
-
-// Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.'
+  max: 10000, // 10k requests per 15 minutes (effectively unlimited for normal use)
+  message: { error: 'Too many requests, please try again later.' },
+  standardHeaders: true, // Return rate limit info in headers
+  legacyHeaders: false, // Disable `X-RateLimit-*` headers
 });
+
 app.use('/api', limiter);
 
 // Body parsing middleware

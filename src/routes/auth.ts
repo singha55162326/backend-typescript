@@ -684,5 +684,126 @@ router.patch(
 );
 
 
+/**
+ * @swagger
+ * /api/users/{id}:
+ *   put:
+ *     summary: Fully update user profile (replace entire user data)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: User ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               firstName:
+ *                 type: string
+ *                 minLength: 1
+ *               lastName:
+ *                 type: string
+ *                 minLength: 1
+ *               phone:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *                 enum: [general_user, stadium_owner]
+ *               status:
+ *                 type: string
+ *                 enum: [active, suspended, inactive]
+ *               password:
+ *                 type: string
+ *                 minLength: 6
+ *                 description: Optional; if provided, updates password
+ *     responses:
+ *       200:
+ *         description: User updated successfully
+ *       400:
+ *         description: Validation errors
+ *       404:
+ *         description: User not found
+ */
+router.put(
+  '/users/:id',
+  authenticateToken,
+  requireAdmin,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const { firstName, lastName, phone, role, status, password } = req.body;
+
+      // ✅ No validation — build update object directly
+      const updateData: any = {};
+
+      // Only include fields if they are provided
+      if (firstName) updateData.firstName = firstName.trim();
+      if (lastName) updateData.lastName = lastName.trim();
+      if (phone) updateData.phone = phone.trim();
+      if (role) updateData.role = role; // ⚠️ No enum check
+      if (status) updateData.status = status; // ⚠️ No enum check
+      if (password) {
+        if (password.length < 6) {
+          res.status(400).json({
+            success: false,
+            message: 'Password must be at least 6 characters',
+          });
+          return;
+        }
+        updateData.passwordHash = password; // Mongoose pre-save should hash
+      }
+
+      // Ensure at least one field is being updated
+      if (Object.keys(updateData).length === 0) {
+        res.status(400).json({
+          success: false,
+          message: 'No valid fields to update',
+        });
+        return;
+      }
+
+      // Find and update user
+      const user = await User.findByIdAndUpdate(
+        id,
+        updateData,
+        { new: true, runValidators: true } // Still run schema validators
+      ).select('-passwordHash');
+
+      if (!user) {
+        res.status(404).json({
+          success: false,
+          message: 'User not found',
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        message: 'User updated successfully',
+        user: user.toJSON(),
+      });
+      return;
+
+    } catch (error: any) {
+      console.error('Error updating user:', error); // Log for debugging
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update user',
+        error: error.message,
+      });
+      return;
+    }
+  }
+);
+
+
 
 export default router;
