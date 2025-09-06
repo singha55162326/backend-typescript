@@ -1,5 +1,4 @@
 // src/types/booking.types.ts
-
 import { Document, Types } from 'mongoose';
 
 export interface IRefereeCharge {
@@ -11,7 +10,7 @@ export interface IRefereeCharge {
 }
 
 export interface IDiscount {
-  type: string;
+  type: 'percentage' | 'fixed';
   amount: number;
   description?: string;
 }
@@ -30,7 +29,7 @@ export interface IPayment {
 export interface IAssignedStaff {
   staffId: Types.ObjectId;
   staffName: string;
-  role: string;
+  role: 'referee' | 'manager' | 'assistant';
   assignedAt: Date;
   status: 'assigned' | 'confirmed' | 'completed' | 'cancelled';
 }
@@ -52,12 +51,12 @@ export interface ICancellation {
 }
 
 export interface IHistoryItem {
-  action: 'created' | 'updated' | 'confirmed' | 'cancelled' | 'completed';
+  action: 'created' | 'updated' | 'confirmed' | 'cancelled' | 'completed' | 'no_show';
   changedBy: Types.ObjectId;
-  oldValues?: any;
-  newValues?: any;
+  oldValues?: Record<string, any>;
+  newValues?: Record<string, any>;
   notes?: string;
-  timestamp: Date;
+  timestamp?: Date;
 }
 
 export interface IPricing {
@@ -70,7 +69,7 @@ export interface IPricing {
 }
 
 export interface IBooking extends Document {
-  bookingNumber: string;
+  bookingNumber?: string;
   userId: Types.ObjectId;
   stadiumId: Types.ObjectId;
   fieldId: Types.ObjectId;
@@ -81,7 +80,7 @@ export interface IBooking extends Document {
   pricing: IPricing;
   status: 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'no_show';
   paymentStatus: 'pending' | 'paid' | 'failed' | 'refunded';
-  bookingType: 'regular' | 'tournament' | 'training' | 'event';
+  bookingType?: 'regular' | 'tournament' | 'training' | 'event';
   teamInfo?: ITeamInfo;
   notes?: string;
   specialRequests?: string[];
@@ -90,5 +89,3 @@ export interface IBooking extends Document {
   cancellation?: ICancellation;
   history: IHistoryItem[];
 }
-
-
