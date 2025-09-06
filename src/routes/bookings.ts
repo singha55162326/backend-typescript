@@ -1,11 +1,8 @@
-import { Router, Request, Response, NextFunction } from 'express';
-import { body, query, validationResult } from 'express-validator';
-import Booking from '../models/Booking';
-import Stadium from '../models/Stadium';
-import moment from 'moment-timezone';
+// src/routes/bookingRoutes.ts
+import { Router } from 'express';
+import { body, query } from 'express-validator';
+import { BookingController } from '../controllers/booking.controller';
 import { authenticateToken } from '../middleware/auth';
-import mongoose from 'mongoose';
-import { IPayment } from '@/types/booking.types';
 
 const router = Router();
 
@@ -14,6 +11,215 @@ const router = Router();
  * tags:
  *   name: Bookings
  *   description: Booking management endpoints
+ */
+
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     TeamInfo:
+ *       type: object
+ *       properties:
+ *         teamName:
+ *           type: string
+ *         contactPerson:
+ *           type: string
+ *         contactPhone:
+ *           type: string
+ *         numberOfPlayers:
+ *           type: number
+ *         experience:
+ *           type: string
+ *           enum: [beginner, intermediate, advanced]
+ *     
+ *     Payment:
+ *       type: object
+ *       properties:
+ *         paymentMethod:
+ *           type: string
+ *           enum: [credit_card, debit_card, bank_transfer, digital_wallet, cash]
+ *         amount:
+ *           type: number
+ *         currency:
+ *           type: string
+ *         status:
+ *           type: string
+ *           enum: [pending, completed, failed, cancelled, refunded]
+ *         transactionId:
+ *           type: string
+ *         processedAt:
+ *           type: string
+ *           format: date-time
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *     
+ *     AssignedStaff:
+ *       type: object
+ *       properties:
+ *         staffId:
+ *           type: string
+ *           format: ObjectId
+ *         staffName:
+ *           type: string
+ *         role:
+ *           type: string
+ *           enum: [referee, manager, assistant]
+ *         assignedAt:
+ *           type: string
+ *           format: date-time
+ *         status:
+ *           type: string
+ *           enum: [assigned, confirmed, completed, cancelled]
+ *     
+ *     Discount:
+ *       type: object
+ *       properties:
+ *         type:
+ *           type: string
+ *           enum: [percentage, fixed]
+ *         amount:
+ *           type: number
+ *         description:
+ *           type: string
+ *     
+ *     RefereeCharge:
+ *       type: object
+ *       properties:
+ *         staffId:
+ *           type: string
+ *           format: ObjectId
+ *         refereeName:
+ *           type: string
+ *         hours:
+ *           type: number
+ *         rate:
+ *           type: number
+ *         total:
+ *           type: number
+ *     
+ *     Pricing:
+ *       type: object
+ *       properties:
+ *         baseRate:
+ *           type: number
+ *         totalAmount:
+ *           type: number
+ *         currency:
+ *           type: string
+ *         taxes:
+ *           type: number
+ *         refereeCharges:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/RefereeCharge'
+ *         discounts:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/Discount'
+ *     
+ *     Cancellation:
+ *       type: object
+ *       properties:
+ *         cancelledAt:
+ *           type: string
+ *           format: date-time
+ *         cancelledBy:
+ *           type: string
+ *           format: ObjectId
+ *         reason:
+ *           type: string
+ *         refundAmount:
+ *           type: number
+ *         refundStatus:
+ *           type: string
+ *     
+ *     HistoryItem:
+ *       type: object
+ *       properties:
+ *         action:
+ *           type: string
+ *           enum: [created, updated, confirmed, cancelled, completed, no_show]
+ *         changedBy:
+ *           type: string
+ *           format: ObjectId
+ *         oldValues:
+ *           type: object
+ *         newValues:
+ *           type: object
+ *         notes:
+ *           type: string
+ *         timestamp:
+ *           type: string
+ *           format: date-time
+ *     
+ *     Booking:
+ *       type: object
+ *       properties:
+ *         _id:
+ *           type: string
+ *           format: ObjectId
+ *         bookingNumber:
+ *           type: string
+ *         userId:
+ *           type: string
+ *           format: ObjectId
+ *         stadiumId:
+ *           type: string
+ *           format: ObjectId
+ *         fieldId:
+ *           type: string
+ *           format: ObjectId
+ *         bookingDate:
+ *           type: string
+ *           format: date
+ *         startTime:
+ *           type: string
+ *           pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'
+ *         endTime:
+ *           type: string
+ *           pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'
+ *         durationHours:
+ *           type: number
+ *         pricing:
+ *           $ref: '#/components/schemas/Pricing'
+ *         status:
+ *           type: string
+ *           enum: [pending, confirmed, cancelled, completed, no_show]
+ *         paymentStatus:
+ *           type: string
+ *           enum: [pending, paid, failed, refunded]
+ *         bookingType:
+ *           type: string
+ *           enum: [regular, tournament, training, event]
+ *         teamInfo:
+ *           $ref: '#/components/schemas/TeamInfo'
+ *         notes:
+ *           type: string
+ *         specialRequests:
+ *           type: array
+ *           items:
+ *             type: string
+ *         assignedStaff:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/AssignedStaff'
+ *         payments:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/Payment'
+ *         cancellation:
+ *           $ref: '#/components/schemas/Cancellation'
+ *         history:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/HistoryItem'
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *         updatedAt:
+ *           type: string
+ *           format: date-time
  */
 
 /**
@@ -51,21 +257,9 @@ const router = Router();
  *                 pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'
  *               endTime:
  *                 type: string
- *                 pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'
+ *                 pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]
  *               teamInfo:
- *                 type: object
- *                 properties:
- *                   teamName:
- *                     type: string
- *                   contactPerson:
- *                     type: string
- *                   contactPhone:
- *                     type: string
- *                   numberOfPlayers:
- *                     type: number
- *                   experience:
- *                     type: string
- *                     enum: [beginner, intermediate, advanced]
+ *                 $ref: '#/components/schemas/TeamInfo'
  *               specialRequests:
  *                 type: array
  *                 items:
@@ -98,172 +292,19 @@ router.post('/', [
   body('stadiumId').isMongoId(),
   body('fieldId').isMongoId(),
   body('bookingDate')
-  .custom((value) => {
-    const formats = ['YYYY-MM-DD', 'YYYY-M-D', 'YYYY/MM/DD', 'YYYY/M/D'];
-    const date = moment(value, formats, true);
-    if (!date.isValid()) {
-      throw new Error('Invalid booking date format');
-    }
-    return true;
-  }),
+    .custom((value) => {
+      const formats = ['YYYY-MM-DD', 'YYYY-M-D', 'YYYY/MM/DD', 'YYYY/M/D'];
+      const moment = require('moment');
+      const date = moment(value, formats, true);
+      if (!date.isValid()) {
+        throw new Error('Invalid booking date format');
+      }
+      return true;
+    }),
   body('startTime').matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),
   body('endTime').matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),
   body('teamInfo.teamName').optional().trim()
-], async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      res.status(400).json({
-        success: false,
-        errors: errors.array()
-      });
-      return;
-    }
-
-    const { stadiumId, fieldId, bookingDate, startTime, endTime, teamInfo, specialRequests } = req.body;
-
-    // Check if stadium and field exist
-    const stadium = await Stadium.findById(stadiumId);
-    if (!stadium) {
-      res.status(404).json({
-        success: false,
-        message: 'Stadium not found'
-      });
-      return;
-    }
-
-    // Check if stadium has fields array and find the specific field
-    if (!stadium.fields || !Array.isArray(stadium.fields)) {
-      res.status(404).json({
-        success: false,
-        message: 'Stadium fields not found'
-      });
-      return;
-    }
-
-    const field = stadium.fields.find((f: any) => f._id?.toString() === fieldId);
-    if (!field) {
-      res.status(404).json({
-        success: false,
-        message: 'Field not found'
-      });
-      return;
-    }
-
-    // Check availability
-    const existingBooking = await Booking.findOne({
-      fieldId,
-      bookingDate: new Date(bookingDate),
-      $or: [
-        {
-          $and: [
-            { startTime: { $lt: endTime } },
-            { endTime: { $gt: startTime } }
-          ]
-        }
-      ],
-      status: { $in: ['pending', 'confirmed'] }
-    });
-
-    if (existingBooking) {
-      res.status(400).json({
-        success: false,
-        message: 'Time slot is already booked'
-      });
-      return;
-    }
-
-    // Calculate pricing
-    const startMoment = moment(startTime, 'HH:mm');
-    const endMoment = moment(endTime, 'HH:mm');
-    const durationHours = endMoment.diff(startMoment, 'hours', true);
-    const baseRate = field.pricing?.baseHourlyRate || 0;
-    const baseAmount = baseRate * durationHours;
-
-    // Auto-assign referee if needed and available
-    const assignedStaff = [];
-    const refereeCharges = [];
-    
-    if (req.body.needsReferee !== false && stadium.staff && Array.isArray(stadium.staff)) {
-      const bookingDay = moment(bookingDate).day();
-      const availableReferees = stadium.staff.filter((staff: any) => 
-        staff.role === 'referee' && 
-        staff.status === 'active' &&
-        staff.availability && Array.isArray(staff.availability) &&
-        staff.availability.some((avail: any) => 
-          avail.dayOfWeek === bookingDay &&
-          avail.startTime <= startTime &&
-          avail.endTime >= endTime &&
-          avail.isAvailable
-        )
-      );
-
-      if (availableReferees.length > 0) {
-        const referee = availableReferees[0]; // Take first available
-        assignedStaff.push({
-          staffId: (referee as any)._id || new mongoose.Types.ObjectId(),
-          staffName: referee.name,
-          role: 'referee',
-          status: 'assigned'
-        });
-
-        refereeCharges.push({
-          staffId: (referee as any)._id || new mongoose.Types.ObjectId(),
-          refereeName: referee.name,
-          hours: durationHours,
-          rate: referee.rates?.hourlyRate || 0,
-          total: (referee.rates?.hourlyRate || 0) * durationHours
-        });
-      }
-    }
-
-    const totalRefereeCharges = refereeCharges.reduce((sum: number, charge: any) => sum + charge.total, 0);
-    const totalAmount = baseAmount + totalRefereeCharges;
-
-    // Create booking
-    const booking = new Booking({
-      userId: req.user?.userId,
-      stadiumId,
-      fieldId,
-      bookingDate: new Date(bookingDate),
-      startTime,
-      endTime,
-      durationHours,
-      pricing: {
-        baseRate: baseRate,
-        totalAmount,
-        currency: 'LAK',
-        refereeCharges
-      },
-      teamInfo,
-      specialRequests: specialRequests || [],
-      assignedStaff,
-      history: [{
-        action: 'created',
-        changedBy: req.user?.userId,
-        newValues: { status: 'pending' },
-        notes: 'Booking created'
-      }]
-    });
-
-    await booking.save();
-
-    res.status(201).json({
-      success: true,
-      message: 'Booking created successfully',
-      data: booking
-    });
-  } catch (error: any) {
-    if (error.code === 11000) {
-      res.status(400).json({
-        success: false,
-        message: 'Time slot is already booked'
-      });
-      return;
-    }
-    next(error);
-  }
-});
+], BookingController.createBooking);
 
 /**
  * @swagger
@@ -326,40 +367,7 @@ router.get('/my-bookings', [
   query('status').optional().isIn(['pending', 'confirmed', 'cancelled', 'completed', 'no_show']),
   query('page').optional().isInt({ min: 1 }),
   query('limit').optional().isInt({ min: 1, max: 50 })
-], async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 10;
-    const skip = (page - 1) * limit;
-
-    let query: any = { userId: req.user?.userId };
-    if (req.query.status) {
-      query.status = req.query.status;
-    }
-
-    const bookings = await Booking.find(query)
-      .populate('stadiumId', 'name address')
-      .sort({ bookingDate: -1, startTime: -1 })
-      .skip(skip)
-      .limit(limit);
-
-    const total = await Booking.countDocuments(query);
-
-    res.json({
-      success: true,
-      data: bookings,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit)
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
+], BookingController.getUserBookings);
 
 /**
  * @swagger
@@ -450,70 +458,43 @@ router.get('/', [
   query('endDate').optional().isISO8601(),
   query('page').optional().isInt({ min: 1 }),
   query('limit').optional().isInt({ min: 1, max: 100 })
-], async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    // Check if user is admin
-    if (req.user?.role !== 'stadium_owner' && req.user?.role !== 'superadmin') {
-      res.status(403).json({
-        success: false,
-        message: 'Admin access required to view all bookings'
-      });
-      return;
-    }
+], BookingController.getAllBookings);
 
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
-    const skip = (page - 1) * limit;
-
-    // Build query based on filters
-    let query: any = {};
-
-    if (req.query.status) {
-      query.status = req.query.status;
-    }
-
-    if (req.query.stadiumId) {
-      query.stadiumId = req.query.stadiumId;
-    }
-
-    if (req.query.userId) {
-      query.userId = req.query.userId;
-    }
-
-    if (req.query.startDate || req.query.endDate) {
-      query.bookingDate = {};
-      if (req.query.startDate) {
-        query.bookingDate.$gte = new Date(req.query.startDate as string);
-      }
-      if (req.query.endDate) {
-        query.bookingDate.$lte = new Date(req.query.endDate as string);
-      }
-    }
-
-    const bookings = await Booking.find(query)
-      .populate('userId', 'name email phone')
-      .populate('stadiumId', 'name address')
-      .populate('fieldId', 'fieldName type')
-      .sort({ createdAt: -1, bookingDate: -1 })
-      .skip(skip)
-      .limit(limit);
-
-    const total = await Booking.countDocuments(query);
-
-    res.json({
-      success: true,
-      data: bookings,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit)
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-});
+/**
+ * @swagger
+ * /api/bookings/{bookingId}:
+ *   get:
+ *     summary: Get booking details by ID
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: bookingId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Booking ID
+ *     responses:
+ *       200:
+ *         description: Booking details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   $ref: '#/components/schemas/Booking'
+ *       400:
+ *         description: Invalid booking ID
+ *       403:
+ *         description: Access denied
+ *       404:
+ *         description: Booking not found
+ */
+router.get('/:bookingId', authenticateToken, BookingController.getBookingById);
 
 /**
  * @swagger
@@ -569,86 +550,7 @@ router.get('/', [
 router.put('/:bookingId/cancel', [
   authenticateToken,
   body('reason').optional().trim()
-], async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const booking = await Booking.findById(req.params.bookingId);
-    if (!booking) {
-      res.status(404).json({
-        success: false,
-        message: 'Booking not found'
-      });
-      return;
-    }
-
-    // Check ownership
-    if (booking.userId.toString() !== req.user?.userId && req.user?.role !== 'superadmin') {
-      res.status(403).json({
-        success: false,
-        message: 'Not authorized to cancel this booking'
-      });
-      return;
-    }
-
-    // Check if cancellation is allowed
-    const bookingDateTime = moment.tz(
-      `${booking.bookingDate.toISOString().split('T')[0]} ${booking.startTime}`,
-      'YYYY-MM-DD HH:mm',
-      'Asia/Vientiane'
-    );
-    const now = moment.tz('Asia/Vientiane');
-    const hoursUntilBooking = bookingDateTime.diff(now, 'hours');
-
-    if (hoursUntilBooking < 24 && req.user?.role !== 'stadium_owner') {
-      res.status(400).json({
-        success: false,
-        message: 'Bookings can only be cancelled 24 hours in advance'
-      });
-      return;
-    }
-
-    // Calculate refund
-    let refundAmount = 0;
-    if (booking.paymentStatus === 'paid') {
-      if (hoursUntilBooking >= 48) {
-        refundAmount = booking.pricing.totalAmount; // Full refund
-      } else if (hoursUntilBooking >= 24) {
-        refundAmount = booking.pricing.totalAmount * 0.5; // 50% refund
-      }
-    }
-
-    // Update booking
-    booking.status = 'cancelled';
-    booking.cancellation = {
-      cancelledAt: new Date(),
-      cancelledBy: new mongoose.Types.ObjectId(req.user?.userId),
-      reason: req.body.reason || 'User cancellation',
-      refundAmount,
-      refundStatus: refundAmount > 0 ? 'pending' : 'not_applicable'
-    };
-
-    booking.history.push({
-      action: 'cancelled',
-      changedBy: new mongoose.Types.ObjectId(req.user?.userId),
-      oldValues: { status: booking.status },
-      newValues: { status: 'cancelled' },
-      notes: req.body.reason || 'User cancellation'
-    } as any);
-
-    await booking.save();
-
-    res.json({
-      success: true,
-      message: 'Booking cancelled successfully',
-      data: {
-        booking,
-        refundAmount
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
+], BookingController.cancelBooking);
 
 /**
  * @swagger
@@ -688,140 +590,7 @@ router.put('/:bookingId/cancel', [
  *       500:
  *         description: Failed to confirm booking
  */
-router.put('/:bookingId/confirm', [
-  authenticateToken
-], async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    // Check if user is admin
-    if (req.user?.role !== 'stadium_owner' && req.user?.role !== 'superadmin') {
-      res.status(403).json({
-        success: false,
-        message: 'Admin access required to confirm bookings'
-      });
-      return;
-    }
-
-    const booking = await Booking.findById(req.params.bookingId);
-    if (!booking) {
-      res.status(404).json({
-        success: false,
-        message: 'Booking not found'
-      });
-      return;
-    }
-
-    // Check if booking can be confirmed
-    if (booking.status !== 'pending') {
-      res.status(400).json({
-        success: false,
-        message: `Booking cannot be confirmed. Current status: ${booking.status}`
-      });
-      return;
-    }
-
-    // Update booking status to confirmed
-    const oldStatus = booking.status;
-    booking.status = 'confirmed';
-    
-    // Add to history
-    booking.history.push({
-      action: 'confirmed',
-      changedBy: new mongoose.Types.ObjectId(req.user.userId),
-      oldValues: { status: oldStatus },
-      newValues: { status: 'confirmed' },
-      notes: 'Booking confirmed by admin'
-    } as any);
-
-    await booking.save();
-
-    // Populate the updated booking for response
-    const updatedBooking = await Booking.findById(booking._id)
-      .populate('userId', 'name email phone')
-      .populate('stadiumId', 'name address phone manager')
-      .populate('fieldId', 'fieldName type size')
-      .populate('cancellation.cancelledBy', 'name role')
-      .populate('history.changedBy', 'name role')
-      .populate('assignedStaff.staffId', 'name phone role');
-
-    res.json({
-      success: true,
-      message: 'Booking confirmed successfully',
-      data: updatedBooking
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-
-
-
-/**
- * @swagger
- * /api/bookings/{bookingId}:
- *   get:
- *     summary: Get booking details by ID
- *     tags: [Bookings]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: bookingId
- *         required: true
- *         schema:
- *           type: string
- *         description: Booking ID
- *     responses:
- *       200:
- *         description: Booking details
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Booking'
- *       404:
- *         description: Booking not found
- */
-router.get('/:bookingId', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { bookingId } = req.params;
-
-    if (!mongoose.isValidObjectId(bookingId)) {
-      res.status(400).json({ success: false, message: 'Invalid booking ID' });
-      return;
-    }
-
-    const booking = await Booking.findById(bookingId)
-      .populate('userId', 'name email phone')
-      .populate('stadiumId', 'name address phone manager')
-      .populate('fieldId', 'fieldName type size')
-      .populate('cancellation.cancelledBy', 'name role')
-      .populate('history.changedBy', 'name role')
-      .populate('assignedStaff.staffId', 'name phone role');
-
-    if (!booking) {
-      res.status(404).json({ success: false, message: 'Booking not found' });
-      return;
-    }
-
-    
-    // Authorization: Only owner or admin can view
-   if (
-  booking.userId.toString() !== req.user?.userId &&
-  req.user?.role !== 'stadium_owner' &&
-  req.user?.role !== 'superadmin'
-) {
-  res.status(403).json({ success: false, message: 'Access denied' });
-  return;
-}
-
-    res.json({ success: true, data: booking });
-    return;
-  } catch (error) {
-    next(error);
-    return;
-  }
-});
-
+router.put('/:bookingId/confirm', authenticateToken, BookingController.confirmBooking);
 
 /**
  * @swagger
@@ -852,6 +621,7 @@ router.get('/:bookingId', authenticateToken, async (req: Request, res: Response,
  *                 enum: [credit_card, debit_card, bank_transfer, digital_wallet, cash]
  *               amount:
  *                 type: number
+ *                 minimum: 0.01
  *               transactionId:
  *                 type: string
  *               gatewayResponse:
@@ -859,271 +629,30 @@ router.get('/:bookingId', authenticateToken, async (req: Request, res: Response,
  *     responses:
  *       200:
  *         description: Payment added successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   $ref: '#/components/schemas/Booking'
+ *       400:
+ *         description: Validation error
+ *       403:
+ *         description: Not authorized
+ *       404:
+ *         description: Booking not found
  */
 router.post('/:bookingId/payment', [
   authenticateToken,
   body('paymentMethod').isIn(['credit_card', 'debit_card', 'bank_transfer', 'digital_wallet', 'cash']),
   body('amount').isFloat({ min: 0.01 }),
   body('transactionId').optional().trim()
-], async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
-
-    const booking = await Booking.findById(req.params.bookingId);
-    if (!booking) {
-      return res.status(404).json({ success: false, message: 'Booking not found' });
-    }
-
-    if (booking.userId.toString() !== req.user?.userId && req.user?.role !== 'superadmin') {
-      return res.status(403).json({ success: false, message: 'Not authorized' });
-    }
-
-    const { paymentMethod, amount, transactionId, gatewayResponse } = req.body;
-
-    const payment: IPayment = {
-      paymentMethod,
-      amount,
-      currency: booking.pricing.currency || 'LAK',
-      status: 'completed',
-      transactionId,
-      gatewayResponse,
-      processedAt: new Date(),
-      createdAt: new Date()
-    };
-
-    if (!Array.isArray(booking.payments)) {
-      booking.payments = [];
-    }
-    booking.payments.push(payment);
-
-    // Update payment status
-    if (booking.payments.reduce((sum, p) => sum + p.amount, 0) >= booking.pricing.totalAmount) {
-      booking.paymentStatus = 'paid';
-    } else {
-      booking.paymentStatus = 'pending';
-    }
-
-    booking.history.push({
-      action: 'updated',
-      changedBy: new mongoose.Types.ObjectId(req.user.userId),
-      newValues: { paymentStatus: booking.paymentStatus },
-      notes: `Payment of ${amount} ${booking.pricing.currency} received via ${paymentMethod}`
-    } as any);
-
-    await booking.save();
-
-    res.json({
-      success: true,
-      message: 'Payment added successfully',
-      data: booking
-    });
-    return;
-  } catch (error) {
-    next(error);
-    return;
-  }
-});
-
-
-
-
-
-/**
- * @swagger
- * /api/bookings/{bookingId}/assign-staff:
- *   post:
- *     summary: Assign staff (e.g., referee) to booking
- *     tags: [Bookings]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: bookingId
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: array
- *             items:
- *               type: object
- *               required:
- *                 - staffId
- *                 - role
- *               properties:
- *                 staffId:
- *                   type: string
- *                 staffName:
- *                   type: string
- *                 role:
- *                   type: string
- *     responses:
- *       200:
- *         description: Staff assigned successfully
- */
-router.post('/:bookingId/assign-staff', [
-  authenticateToken,
-  body().isArray(),
-  body('*.staffId').isMongoId(),
-  body('*.role').isIn(['referee', 'manager', 'assistant'])
-], async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      res.status(400).json({ success: false, errors: errors.array() });
-      return;
-    }
-
-    const booking = await Booking.findById(req.params.bookingId);
-    if (!booking) {
-      res.status(404).json({ success: false, message: 'Booking not found' });
-      return;
-    }
-
-    if (req.user?.role !== 'admin' && req.user?.role !== 'superadmin') {
-      res.status(403).json({ success: false, message: 'Only admins can assign staff' });
-      return;
-    }
-
-    const newAssignments = req.body;
-    const now = new Date();
-
-    // Ensure assignedStaff is initialized
-    if (!Array.isArray(booking.assignedStaff)) {
-      booking.assignedStaff = [];
-    }
-
-    for (const assignment of newAssignments) {
-      booking.assignedStaff.push({
-        staffId: new mongoose.Types.ObjectId(assignment.staffId),
-        staffName: assignment.staffName,
-        role: assignment.role,
-        assignedAt: now,
-        status: 'assigned'
-      });
-
-      // Log in history
-      booking.history.push({
-        action: 'updated',
-        changedBy: new mongoose.Types.ObjectId(req.user!.userId), // using ! since guard above implies user exists
-        newValues: { assignedStaff: assignment.staffName, role: assignment.role },
-        notes: `Staff assigned: ${assignment.staffName} as ${assignment.role}`
-      } as any);
-    }
-
-    await booking.save();
-
-    res.json({
-      success: true,
-      message: 'Staff assigned successfully',
-      data: booking
-    });
-    return;
-  } catch (error) {
-    next(error);
-    return;
-  }
-});
-
-/**
- * @swagger
- * /api/bookings/{bookingId}/apply-discount:
- *   post:
- *     summary: Apply a discount to booking
- *     tags: [Bookings]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: bookingId
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - type
- *               - amount
- *             properties:
- *               type:
- *                 type: string
- *                 enum: [percentage, fixed]
- *               amount:
- *                 type: number
- *               description:
- *                 type: string
- *     responses:
- *       200:
- *         description: Discount applied
- */
-router.post('/:bookingId/apply-discount', [
-  authenticateToken,
-  body('type').isIn(['percentage', 'fixed']),
-  body('amount').isFloat({ min: 0 })
-], async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const booking = await Booking.findById(req.params.bookingId);
-    if (!booking) {
-      res.status(404).json({ success: false, message: 'Booking not found' });
-      return;
-    }
-
-    if (req.user?.role !== 'admin' && req.user?.role !== 'superadmin') {
-      res.status(403).json({ success: false, message: 'Only admins can apply discounts' });
-      return;
-    }
-
-    const { type, amount, description } = req.body;
-    const originalTotal = booking.pricing.totalAmount;
-
-    let discountAmount = type === 'percentage' ? (originalTotal * amount) / 100 : amount;
-    const newTotal = originalTotal - discountAmount;
-
-    if (newTotal < 0) discountAmount = originalTotal;
-
-    if (!booking.pricing.discounts) {
-      booking.pricing.discounts = [];
-    }
-
-    booking.pricing.discounts.push({
-      type,
-      amount: discountAmount,
-      description: description || `${type} discount`
-    });
-
-    booking.pricing.totalAmount = originalTotal - discountAmount;
-
-    booking.history.push({
-      action: 'updated',
-      changedBy: new mongoose.Types.ObjectId(req.user.userId),
-      oldValues: { totalAmount: originalTotal },
-      newValues: { totalAmount: booking.pricing.totalAmount, discount: discountAmount },
-      notes: `Discount applied: ${description || type}`
-    } as any);
-
-    await booking.save();
-
-    res.json({
-      success: true,
-      message: 'Discount applied',
-      data: booking
-    });
-    return;
-  } catch (error) {
-    next(error);
-    return;
-  }
-});
+], BookingController.addPayment);
 
 /**
  * @swagger
@@ -1156,49 +685,134 @@ router.post('/:bookingId/apply-discount', [
  *                     $ref: '#/components/schemas/Payment'
  *                 totalPaid:
  *                   type: number
+ *       400:
+ *         description: Invalid booking ID
  *       403:
  *         description: Not authorized
  *       404:
  *         description: Booking not found
  */
-router.get(
-  '/:bookingId/payments',
+router.get('/:bookingId/payments', authenticateToken, BookingController.getBookingPayments);
+
+/**
+ * @swagger
+ * /api/bookings/{bookingId}/assign-staff:
+ *   post:
+ *     summary: Assign staff (e.g., referee) to booking
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: bookingId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: array
+ *             items:
+ *               type: object
+ *               required:
+ *                 - staffId
+ *                 - role
+ *               properties:
+ *                 staffId:
+ *                   type: string
+ *                   format: ObjectId
+ *                 staffName:
+ *                   type: string
+ *                 role:
+ *                   type: string
+ *                   enum: [referee, manager, assistant]
+ *     responses:
+ *       200:
+ *         description: Staff assigned successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   $ref: '#/components/schemas/Booking'
+ *       400:
+ *         description: Validation error
+ *       403:
+ *         description: Only admins can assign staff
+ *       404:
+ *         description: Booking not found
+ */
+router.post('/:bookingId/assign-staff', [
   authenticateToken,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { bookingId } = req.params;
+  body().isArray(),
+  body('*.staffId').isMongoId(),
+  body('*.role').isIn(['referee', 'manager', 'assistant'])
+], BookingController.assignStaff);
 
-      if (!mongoose.isValidObjectId(bookingId)) {
-        return res.status(400).json({ success: false, message: 'Invalid booking ID' });
-      }
-
-      const booking = await Booking.findById(bookingId).populate('userId', 'name email');
-
-      if (!booking) {
-        return res.status(404).json({ success: false, message: 'Booking not found' });
-      }
-
-      // Authorization: only user or admin
-      if (booking.userId.toString() !== req.user?.userId && req.user?.role !== 'superadmin') {
-        return res.status(403).json({ success: false, message: 'Access denied' });
-      }
-
-      const payments = booking.payments || [];
-      const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
-
-      return res.json({
-        success: true,
-        data: payments,
-        totalPaid
-      });
-    } catch (error) {
-      next(error);
-      return;
-    }
-  }
-);
-
-
-
+/**
+ * @swagger
+ * /api/bookings/{bookingId}/apply-discount:
+ *   post:
+ *     summary: Apply a discount to booking
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: bookingId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - type
+ *               - amount
+ *             properties:
+ *               type:
+ *                 type: string
+ *                 enum: [percentage, fixed]
+ *               amount:
+ *                 type: number
+ *                 minimum: 0
+ *               description:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Discount applied
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   $ref: '#/components/schemas/Booking'
+ *       400:
+ *         description: Validation error
+ *       403:
+ *         description: Only admins can apply discounts
+ *       404:
+ *         description: Booking not found
+ */
+router.post('/:bookingId/apply-discount', [
+  authenticateToken,
+  body('type').isIn(['percentage', 'fixed']),
+  body('amount').isFloat({ min: 0 })
+], BookingController.applyDiscount);
 
 export default router;
