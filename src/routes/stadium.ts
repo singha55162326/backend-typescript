@@ -9,13 +9,6 @@ const router = Router();
 
 /**
  * @swagger
- * tags:
- *   name: Stadiums
- *   description: Stadium management endpoints
- */
-
-/**
- * @swagger
  * /api/stadiums:
  *   get:
  *     summary: Get all stadiums (public)
@@ -54,6 +47,19 @@ const router = Router();
  *         schema:
  *           type: number
  *         description: Search radius in kilometers
+ *       - in: query
+ *         name: sort
+ *         schema:
+ *           type: string
+ *           enum: [name, createdAt, capacity, averageRating]
+ *         description: Field to sort by
+ *       - in: query
+ *         name: order
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: desc
+ *         description: Sort order (asc or desc)
  *     responses:
  *       200:
  *         description: List of stadiums
@@ -93,6 +99,16 @@ router.get(
     query('lat').optional().isFloat(),
     query('lng').optional().isFloat(),
     query('radius').optional().isFloat(),
+
+    // ✅ Sorting validation
+    query('sort')
+      .optional()
+      .isIn(['name', 'createdAt', 'capacity', 'averageRating'])
+      .withMessage('Invalid sort field'),
+    query('order')
+      .optional()
+      .isIn(['asc', 'desc'])
+      .withMessage('Order must be "asc" or "desc"'),
   ],
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -121,7 +137,7 @@ router.get(
               type: 'Point',
               coordinates: [lng, lat],
             },
-            $maxDistance: radius * 1000, // meters
+            $maxDistance: radius * 1000,
           },
         };
       }
@@ -131,16 +147,26 @@ router.get(
         dbQuery['address.city'] = new RegExp(req.query.city as string, 'i');
       }
 
+      // ✅ Sorting logic
+      const sortField = (req.query.sort as string) || 'stats.averageRating';
+      const sortOrder = (req.query.order as string) === 'asc' ? 1 : -1;
+
+      const sortOptions: Record<string, any> = {
+        name: { name: sortOrder },
+        createdAt: { createdAt: sortOrder },
+        capacity: { capacity: sortOrder },
+        averageRating: { 'stats.averageRating': sortOrder },
+      };
+
+      const dbSort = sortOptions[sortField] || { 'stats.averageRating': -1 };
+
       const stadiums = await Stadium.find(dbQuery)
         .populate('ownerId', 'firstName lastName email')
-        .select('-staff.bankAccountDetails') // Hide sensitive data
+        .select('-staff.bankAccountDetails')
         .skip(skip)
         .limit(limit)
-        .sort({ 'stats.averageRating': -1 })
+        .sort(dbSort)
         .exec();
-
-
-
 
       const total = await Stadium.countDocuments(dbQuery);
       const totalPages = Math.ceil(total / limit);
@@ -847,6 +873,165 @@ router.put(
         return res.status(400).json({
           success: false,
           message: `Upload error: ${error.message}`,
+        });
+      }
+      return next(error);
+    }
+  }
+);
+
+
+/**
+ * @swagger
+ * /api/stadiums/{id}:
+ *   delete:
+ *     summary: Delete a stadium by setting status to inactive (owner/admin only)
+ *     tags: [Stadiums]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Stadium ID
+ *     responses:
+ *       200:
+ *         description: Stadium deleted successfully (soft delete)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *       403:
+ *         description: Not authorized to delete this stadium
+ *       404:
+ *         description: Stadium not found
+ *       500:
+ *         description: Failed to delete stadium
+ */
+router.delete(
+  '/:id',
+  [
+    authenticateToken,
+    authorizeRoles(['stadium_owner', 'superadmin']),
+  ],
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+
+      const stadium = await Stadium.findById(id);
+      if (!stadium) {
+        return res.status(404).json({
+          success: false,
+          message: 'Stadium not found',
+        });
+      }
+
+      // Authorization: Only owner or superadmin can delete
+      if (req.user?.role !== 'superadmin' && stadium.ownerId.toString() !== req.user?.userId) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not authorized to delete this stadium',
+        });
+      }
+
+      // Soft delete: update status to inactive
+      stadium.status = 'inactive';
+      await stadium.save();
+
+      return res.json({
+        success: true,
+        message: 'Stadium deleted successfully (deactivated)',
+      });
+    } catch (error: any) {
+      if (error.name === 'CastError' && error.path === '_id') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid stadium ID format',
+        });
+      }
+      return next(error);
+    }
+  }
+);
+
+/**
+ * @swagger
+ * /api/stadiums/{id}:
+ *   delete:
+ *     summary: Permanently delete a stadium (superadmin or owner only)
+ *     tags: [Stadiums]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Stadium ID
+ *     responses:
+ *       200:
+ *         description: Stadium permanently deleted
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *       403:
+ *         description: Not authorized
+ *       404:
+ *         description: Stadium not found
+ *       500:
+ *         description: Server error
+ */
+router.delete(
+  '/:id',
+  [
+    authenticateToken,
+    authorizeRoles(['stadium_owner', 'superadmin']),
+  ],
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+
+      const stadium = await Stadium.findById(id);
+      if (!stadium) {
+        return res.status(404).json({
+          success: false,
+          message: 'Stadium not found',
+        });
+      }
+
+      // Authorization check
+      if (req.user?.role !== 'superadmin' && stadium.ownerId.toString() !== req.user?.userId) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not authorized to delete this stadium',
+        });
+      }
+
+      await Stadium.deleteOne({ _id: id });
+
+      return res.json({
+        success: true,
+        message: 'Stadium permanently deleted',
+      });
+    } catch (error: any) {
+      if (error.name === 'CastError') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid stadium ID format',
         });
       }
       return next(error);

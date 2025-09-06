@@ -19,7 +19,7 @@ const options: swaggerJsdoc.Options = {
       {
         url: process.env.NODE_ENV === 'production'
           ? 'https://api-pos.edl.com.la/api'
-          : 'http://localhost:5000/api',
+          : 'http://localhost:5000',
         description: process.env.NODE_ENV === 'production'
           ? 'Production Server'
           : 'Development Server',

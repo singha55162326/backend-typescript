@@ -5,18 +5,7 @@ import Stadium from '../models/Stadium';
 import moment from 'moment-timezone';
 import { authenticateToken } from '../middleware/auth';
 import mongoose from 'mongoose';
-
-// Define IPayment interface if not imported from models
-interface IPayment {
-  paymentMethod: 'credit_card' | 'debit_card' | 'bank_transfer' | 'digital_wallet' | 'cash';
-  amount: number;
-  currency: string;
-  status: 'pending' | 'cancelled' | 'completed' | 'failed' | 'refunded';
-  transactionId?: string;
-  gatewayResponse?: any;
-  processedAt: Date;
-  createdAt: Date;
-}
+import { IPayment } from '@/types/booking.types';
 
 const router = Router();
 
