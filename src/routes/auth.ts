@@ -1,8 +1,8 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response,NextFunction } from 'express';
 import { body, param, query, validationResult } from 'express-validator';
 import jwt from 'jsonwebtoken';
 import User from '../models/User';
-import { authenticateToken } from '../middleware/auth';
+import { authenticateToken, authorizeRoles } from '../middleware/auth';
 
 const router = Router();
 
@@ -189,6 +189,38 @@ router.get('/me', authenticateToken, async (req: Request, res: Response): Promis
 });
 
 
+/**
+ * @swagger
+ * /api/auth/stadium-owners:
+ *   get:
+ *     summary: Get all stadium owners for assignment
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of stadium owners
+ */
+router.get(
+  '/stadium-owners',
+  authenticateToken,
+  authorizeRoles(['superadmin']),
+  async (_req: Request, res: Response, next: NextFunction) => { // ✅ Now recognized
+    try {
+      const stadiumOwners = await User.find(
+        { role: 'stadium_owner' },
+        'firstName lastName email phone'
+      ).exec();
+
+      res.json({
+        success: true,
+        data: stadiumOwners
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 /**
  * @swagger

@@ -92,6 +92,7 @@ const router = Router();
  */
 router.get(
   '/',
+    
   [
     query('city').optional().trim(),
     query('page').optional().isInt({ min: 1 }),
@@ -186,6 +187,43 @@ router.get(
     }
   }
 );
+
+/**
+ * @swagger
+ * /api/stadiums/my-stadiums:
+ *   get:
+ *     summary: Get stadiums owned by current user (stadium owners only)
+ *     tags: [Stadiums]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of user's stadiums
+ */
+router.get('/my-stadiums', [
+  authenticateToken,
+  authorizeRoles(['stadium_owner', 'superadmin'])
+], async (req: Request, res: Response, next: NextFunction) => { // ✅ Use Request here
+  try {
+    let query: any = {};
+
+    if (req.user?.role === 'stadium_owner') {
+      query.ownerId = req.user.userId;
+    }
+
+    const stadiums = await Stadium.find(query)
+      .populate('ownerId', 'firstName lastName email')
+      .select('-staff.bankAccountDetails')
+      .exec();
+
+    res.json({
+      success: true,
+      data: stadiums
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 /**
  * @swagger
  * /api/stadiums:
