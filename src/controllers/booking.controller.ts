@@ -211,7 +211,7 @@ export class BookingController {
   static async getAllBookings(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'stadium_owner' && req.user?.role !== 'superadmin') {
+      if (req.user?.role !== 'superadmin') {
         res.status(403).json({
           success: false,
           message: 'Admin access required to view all bookings'
