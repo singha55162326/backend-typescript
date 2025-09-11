@@ -7,6 +7,17 @@ interface ITimeSlot {
   endTime: string;
   rate: number;
   currency: string;
+  status?: 'available' | 'unavailable';
+}
+
+interface IUnavailableSlot {
+  startTime: string;
+  endTime: string;
+  rate: number;
+  currency: string;
+  reason: string;
+  status: 'schedule_unavailable' | 'booked';
+  bookingStatus?: string;
 }
 
 interface IAvailableReferee {
@@ -106,6 +117,104 @@ class AvailabilityService {
     }
 
     return availableSlots;
+  }
+
+  static async getComprehensiveAvailability(
+    fieldId: string,
+    date: string,
+    field: IField
+  ): Promise<{
+    availableSlots: ITimeSlot[];
+    unavailableSlots: IUnavailableSlot[];
+    summary: {
+      totalSlots: number;
+      availableCount: number;
+      unavailableCount: number;
+    };
+  }> {
+    const dayOfWeek = moment(date).day();
+    const availableSlots: ITimeSlot[] = [];
+    const unavailableSlots: IUnavailableSlot[] = [];
+
+    // Get regular schedule for the day
+    const daySchedule = field.availabilitySchedule?.find((schedule: { dayOfWeek: number; }) => 
+      schedule.dayOfWeek === dayOfWeek
+    );
+
+    if (!daySchedule) {
+      return {
+        availableSlots: [],
+        unavailableSlots: [],
+        summary: {
+          totalSlots: 0,
+          availableCount: 0,
+          unavailableCount: 0
+        }
+      };
+    }
+
+    // Check for special dates
+    const specialDate = field.specialDates?.find((special: { date: moment.MomentInput; }) => 
+      moment(special.date).isSame(moment(date), 'day')
+    );
+
+    const timeSlots = specialDate ? specialDate.timeSlots : daySchedule.timeSlots;
+
+    // Get existing bookings for the date
+    const existingBookings = await Booking.find({
+      fieldId,
+      bookingDate: new Date(date),
+      status: { $in: ['pending', 'confirmed'] }
+    }).select('startTime endTime status');
+
+    // Process each time slot
+    for (const slot of timeSlots as IFieldTimeSlot[]) {
+      const slotData = {
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        rate: slot.specialRate || field.pricing.baseHourlyRate,
+        currency: 'LAK'
+      };
+
+      // Check if slot is marked as unavailable in schedule
+      if (!slot.isAvailable) {
+        unavailableSlots.push({
+          ...slotData,
+          reason: 'Not available in schedule',
+          status: 'schedule_unavailable'
+        });
+        continue;
+      }
+
+      // Check for booking conflicts
+      const conflictingBooking = existingBookings.find(booking => 
+        (booking.startTime < slot.endTime && booking.endTime > slot.startTime)
+      );
+
+      if (conflictingBooking) {
+        unavailableSlots.push({
+          ...slotData,
+          reason: `Already booked (${conflictingBooking.status})`,
+          status: 'booked',
+          bookingStatus: conflictingBooking.status
+        });
+      } else {
+        availableSlots.push({
+          ...slotData,
+          status: 'available'
+        });
+      }
+    }
+
+    return {
+      availableSlots,
+      unavailableSlots,
+      summary: {
+        totalSlots: timeSlots.length,
+        availableCount: availableSlots.length,
+        unavailableCount: unavailableSlots.length
+      }
+    };
   }
 
   static async getAvailableReferees(

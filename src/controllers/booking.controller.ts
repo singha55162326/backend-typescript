@@ -6,6 +6,7 @@ import Stadium from '../models/Stadium';
 import moment from 'moment-timezone';
 import mongoose from 'mongoose';
 import { IPayment } from '../types/booking.types';
+import AvailabilityService from '../utils/availability';
 
 export class BookingController {
   /**
@@ -676,6 +677,397 @@ export class BookingController {
         success: true,
         message: 'Discount applied',
         data: booking
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Get available and unavailable time slots for a field on a specific date
+   */
+  static async getFieldAvailability(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { stadiumId, fieldId } = req.params;
+      const { date } = req.query;
+
+      if (!date || typeof date !== 'string') {
+        res.status(400).json({
+          success: false,
+          message: 'Date parameter is required (format: YYYY-MM-DD)'
+        });
+        return;
+      }
+
+      // Validate date format
+      const requestedDate = moment(date, 'YYYY-MM-DD', true);
+      if (!requestedDate.isValid()) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid date format. Please use YYYY-MM-DD'
+        });
+        return;
+      }
+
+      // Check if date is in the past
+      const today = moment().startOf('day');
+      if (requestedDate.isBefore(today)) {
+        res.status(400).json({
+          success: false,
+          message: 'Cannot check availability for past dates'
+        });
+        return;
+      }
+
+      // Find stadium and field
+      const stadium = await Stadium.findById(stadiumId);
+      if (!stadium) {
+        res.status(404).json({
+          success: false,
+          message: 'Stadium not found'
+        });
+        return;
+      }
+
+      if (!stadium.fields || !Array.isArray(stadium.fields)) {
+        res.status(404).json({
+          success: false,
+          message: 'Stadium fields not found'
+        });
+        return;
+      }
+
+      const field = stadium.fields.find((f: any) => f._id?.toString() === fieldId);
+      if (!field) {
+        res.status(404).json({
+          success: false,
+          message: 'Field not found'
+        });
+        return;
+      }
+
+      if (field.status !== 'active') {
+        res.status(400).json({
+          success: false,
+          message: `Field is currently ${field.status}`,
+          data: {
+            fieldStatus: field.status,
+            availableSlots: [],
+            unavailableSlots: []
+          }
+        });
+        return;
+      }
+
+      const dayOfWeek = requestedDate.day();
+      
+      // Get field schedule for the day
+      const daySchedule = field.availabilitySchedule?.find((schedule: any) => 
+        schedule.dayOfWeek === dayOfWeek
+      );
+
+      if (!daySchedule) {
+        res.json({
+          success: true,
+          message: 'No schedule available for this day of the week',
+          data: {
+            date: date,
+            dayOfWeek: dayOfWeek,
+            fieldInfo: {
+              name: field.name,
+              type: field.fieldType,
+              surface: field.surfaceType,
+              status: field.status
+            },
+            availableSlots: [],
+            unavailableSlots: []
+          }
+        });
+        return;
+      }
+
+      // Check for special dates
+      const specialDate = field.specialDates?.find((special: any) => 
+        moment(special.date).isSame(requestedDate, 'day')
+      );
+
+      const timeSlots = specialDate ? specialDate.timeSlots : daySchedule.timeSlots;
+
+      // Get existing bookings for the date
+      const existingBookings = await Booking.find({
+        fieldId,
+        bookingDate: new Date(date),
+        status: { $in: ['pending', 'confirmed'] }
+      }).select('startTime endTime status');
+
+      const availableSlots: any[] = [];
+      const unavailableSlots: any[] = [];
+
+      // Process each time slot
+      for (const slot of timeSlots) {
+        const slotData = {
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          rate: (slot as any).specialRate || field.pricing.baseHourlyRate,
+          currency: field.pricing.currency || 'LAK'
+        };
+
+        // Check if slot is marked as unavailable in schedule
+        if (!slot.isAvailable) {
+          unavailableSlots.push({
+            ...slotData,
+            reason: 'Not available in schedule',
+            status: 'schedule_unavailable'
+          });
+          continue;
+        }
+
+        // Check for booking conflicts
+        const conflictingBooking = existingBookings.find(booking => 
+          (booking.startTime < slot.endTime && booking.endTime > slot.startTime)
+        );
+
+        if (conflictingBooking) {
+          unavailableSlots.push({
+            ...slotData,
+            reason: `Already booked (${conflictingBooking.status})`,
+            status: 'booked',
+            bookingStatus: conflictingBooking.status
+          });
+        } else {
+          availableSlots.push({
+            ...slotData,
+            status: 'available'
+          });
+        }
+      }
+
+      // Get available referees for this time
+      const availableReferees = stadium.staff ? await AvailabilityService.getAvailableReferees(
+        stadium.staff,
+        date,
+        '00:00', // We'll check referee availability for the whole day
+        '23:59'
+      ) : [];
+
+      res.json({
+        success: true,
+        data: {
+          date: date,
+          dayOfWeek: dayOfWeek,
+          fieldInfo: {
+            id: fieldId,
+            name: field.name,
+            type: field.fieldType,
+            surface: field.surfaceType,
+            status: field.status,
+            baseRate: field.pricing.baseHourlyRate,
+            currency: field.pricing.currency || 'LAK'
+          },
+          stadiumInfo: {
+            id: stadiumId,
+            name: stadium.name
+          },
+          availableSlots: availableSlots,
+          unavailableSlots: unavailableSlots,
+          summary: {
+            totalSlots: timeSlots.length,
+            availableCount: availableSlots.length,
+            unavailableCount: unavailableSlots.length
+          },
+          availableReferees: availableReferees,
+          specialDateInfo: specialDate ? {
+            isSpecialDate: true,
+            reason: specialDate.reason || 'Special schedule'
+          } : {
+            isSpecialDate: false
+          }
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Check availability of a specific time slot
+   */
+  static async checkSpecificSlot(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { stadiumId, fieldId } = req.params;
+      const { date, startTime, endTime } = req.query;
+
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        res.status(400).json({
+          success: false,
+          errors: errors.array()
+        });
+        return;
+      }
+
+      // Validate that end time is after start time
+      const startMoment = moment(startTime as string, 'HH:mm');
+      const endMoment = moment(endTime as string, 'HH:mm');
+      
+      if (!endMoment.isAfter(startMoment)) {
+        res.status(400).json({
+          success: false,
+          message: 'End time must be after start time'
+        });
+        return;
+      }
+
+      // Find stadium and field
+      const stadium = await Stadium.findById(stadiumId);
+      if (!stadium) {
+        res.status(404).json({
+          success: false,
+          message: 'Stadium not found'
+        });
+        return;
+      }
+
+      const field = stadium.fields?.find((f: any) => f._id?.toString() === fieldId);
+      if (!field) {
+        res.status(404).json({
+          success: false,
+          message: 'Field not found'
+        });
+        return;
+      }
+
+      if (field.status !== 'active') {
+        res.json({
+          success: true,
+          data: {
+            isAvailable: false,
+            reason: `Field is currently ${field.status}`,
+            pricing: null
+          }
+        });
+        return;
+      }
+
+      // Check if time slot is available
+      const isAvailable = await AvailabilityService.checkFieldAvailability(
+        fieldId,
+        date as string,
+        startTime as string,
+        endTime as string
+      );
+
+      const duration = endMoment.diff(startMoment, 'hours', true);
+      const rate = field.pricing.baseHourlyRate;
+      const total = rate * duration;
+
+      if (!isAvailable) {
+        // Find the conflicting booking
+        const conflictingBooking = await Booking.findOne({
+          fieldId,
+          bookingDate: new Date(date as string),
+          $or: [
+            {
+              $and: [
+                { startTime: { $lt: endTime } },
+                { endTime: { $gt: startTime } }
+              ]
+            }
+          ],
+          status: { $in: ['pending', 'confirmed'] }
+        });
+
+        res.json({
+          success: true,
+          data: {
+            isAvailable: false,
+            reason: conflictingBooking 
+              ? `Time slot conflicts with existing ${conflictingBooking.status} booking` 
+              : 'Time slot is not available',
+            pricing: {
+              rate,
+              duration,
+              total,
+              currency: field.pricing.currency || 'LAK'
+            }
+          }
+        });
+        return;
+      }
+
+      // Check if slot is within field's operating hours
+      const dayOfWeek = moment(date as string).day();
+      const daySchedule = field.availabilitySchedule?.find((schedule: any) => 
+        schedule.dayOfWeek === dayOfWeek
+      );
+
+      if (!daySchedule) {
+        res.json({
+          success: true,
+          data: {
+            isAvailable: false,
+            reason: 'Field is not open on this day',
+            pricing: {
+              rate,
+              duration,
+              total,
+              currency: field.pricing.currency || 'LAK'
+            }
+          }
+        });
+        return;
+      }
+
+      // Check if the requested time falls within any available slot
+      const isWithinOperatingHours = daySchedule.timeSlots.some((slot: any) => 
+        slot.isAvailable &&
+        slot.startTime <= (startTime as string) &&
+        slot.endTime >= (endTime as string)
+      );
+
+      if (!isWithinOperatingHours) {
+        res.json({
+          success: true,
+          data: {
+            isAvailable: false,
+            reason: 'Requested time is outside field operating hours',
+            pricing: {
+              rate,
+              duration,
+              total,
+              currency: field.pricing.currency || 'LAK'
+            }
+          }
+        });
+        return;
+      }
+
+      // Get available referees for this time slot
+      const availableReferees = stadium.staff ? await AvailabilityService.getAvailableReferees(
+        stadium.staff,
+        date as string,
+        startTime as string,
+        endTime as string
+      ) : [];
+
+      res.json({
+        success: true,
+        data: {
+          isAvailable: true,
+          reason: 'Time slot is available for booking',
+          pricing: {
+            rate,
+            duration,
+            total,
+            currency: field.pricing.currency || 'LAK'
+          },
+          availableReferees: availableReferees.map(ref => ({
+            id: ref._id,
+            name: ref.name,
+            rate: ref.rate,
+            currency: ref.currency
+          }))
+        }
       });
     } catch (error) {
       next(error);
