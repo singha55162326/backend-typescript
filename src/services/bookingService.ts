@@ -3,7 +3,7 @@ import Booking from '../models/Booking';
 import Stadium from '../models/Stadium';
 import moment from 'moment-timezone';
 import mongoose from 'mongoose';
-import { IPayment, IBooking, IAssignedStaff } from '../types/booking.types';
+import { IPayment } from '../types/booking.types'; // Only import what's used
 
 export class BookingService {
   /**
@@ -235,7 +235,8 @@ export class BookingService {
    * Get bookings with filters and pagination
    */
   static async getBookings(filters: any, pagination: { page: number; limit: number; skip: number }): Promise<{ bookings: any[]; total: number }> {
-    const { page, limit, skip } = pagination;
+    // Only destructure what you use
+    const { limit, skip } = pagination;
     
     const bookings = await Booking.find(filters)
       .populate('userId', 'name email phone')
@@ -254,7 +255,8 @@ export class BookingService {
    * Get user's bookings with filters and pagination
    */
   static async getUserBookings(userId: string, filters: any, pagination: { page: number; limit: number; skip: number }): Promise<{ bookings: any[]; total: number }> {
-    const { page, limit, skip } = pagination;
+    // Only destructure what you use
+    const { limit, skip } = pagination;
     const query = { userId, ...filters };
     
     const bookings = await Booking.find(query)
