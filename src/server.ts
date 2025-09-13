@@ -42,7 +42,7 @@ app.use(cors({
   origin: [
     'http://localhost:3000',
     'http://localhost:8080',
-    'https://web-admin1-three.vercel.app' // Vite dev server
+    'https://web-admin1-git-main-singha25331s-projects.vercel.app/' // Vite dev server
      // Vite dev server
   ],
   credentials: true,
