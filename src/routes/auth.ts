@@ -1,8 +1,8 @@
-import { Router, Request, Response,NextFunction } from 'express';
-import { body, param, query, validationResult } from 'express-validator';
-import jwt from 'jsonwebtoken';
-import User from '../models/User';
+import { Router } from 'express';
+import { body, param, query } from 'express-validator';
+import { AuthController } from '../controllers/auth.controller';
 import { authenticateToken, authorizeRoles } from '../middleware/auth';
+import { requireAdmin } from '../middleware/rbac';
 
 const router = Router();
 
@@ -25,60 +25,7 @@ router.post('/register', [
   body('password').isLength({ min: 6 }),
   body('firstName').trim().isLength({ min: 1 }),
   body('lastName').trim().isLength({ min: 1 })
-], async (req: Request, res: Response): Promise<void> => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      res.status(400).json({
-        success: false,
-        message: 'Validation errors',
-        errors: errors.array()
-      });
-      return;
-    }
-
-    const { email, password, firstName, lastName, phone, role } = req.body;
-
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      res.status(400).json({
-        success: false,
-        message: 'User already exists with this email'
-      });
-      return;
-    }
-
-    const user = new User({
-      email,
-      passwordHash: password,
-      firstName,
-      lastName,
-      phone,
-      role: role || 'general_user'
-    });
-
-    await user.save();
-
-    const token = jwt.sign(
-      { userId: user._id, role: user.role },
-      process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '7d' }
-    );
-
-    res.status(201).json({
-      success: true,
-      message: 'User registered successfully',
-      token,
-      user: user.toJSON()
-    });
-  } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      message: 'Registration failed',
-      error: error.message
-    });
-  }
-});
+], AuthController.register);
 
 /**
  * @swagger
@@ -90,65 +37,7 @@ router.post('/register', [
 router.post('/login', [
   body('email').isEmail().normalizeEmail(),
   body('password').isLength({ min: 1 })
-], async (req: Request, res: Response): Promise<void> => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      res.status(400).json({
-        success: false,
-        message: 'Validation errors',
-        errors: errors.array()
-      });
-      return;
-    }
-
-    const { email, password } = req.body;
-    const user = await User.findOne({ email });
-    if (!user) {
-      res.status(401).json({
-        success: false,
-        message: 'Invalid credentials'
-      });
-      return;
-    }
-
-    const isMatch = await user.comparePassword(password);
-    if (!isMatch) {
-      res.status(401).json({
-        success: false,
-        message: 'Invalid credentials'
-      });
-      return;
-    }
-
-    if (user.status !== 'active') {
-      res.status(401).json({
-        success: false,
-        message: 'Account is inactive or suspended'
-      });
-      return;
-    }
-
-    const token = jwt.sign(
-      { userId: user._id, role: user.role },
-      process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '7d' }
-    );
-
-    res.json({
-      success: true,
-      message: 'Login successful',
-      token,
-      user: user.toJSON()
-    });
-  } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      message: 'Login failed',
-      error: error.message
-    });
-  }
-});
+], AuthController.login);
 
 /**
  * @swagger
@@ -157,36 +46,7 @@ router.post('/login', [
  *     summary: Get current user data
  *     tags: [Authentication]
  */
-router.get('/me', authenticateToken, async (req: Request, res: Response): Promise<void> => {
-  try {
-    if (!req.user || !req.user.userId) {
-      res.status(401).json({
-        success: false,
-        message: 'Unauthorized: User information missing'
-      });
-      return;
-    }
-    const user = await User.findById(req.user.userId);
-    if (!user) {
-      res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-      return;
-    }
-
-    res.json({
-      success: true,
-      user: user.toJSON()
-    });
-  } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to get user data',
-      error: error.message
-    });
-  }
-});
+router.get('/me', authenticateToken, AuthController.getMe);
 
 
 /**
@@ -205,21 +65,7 @@ router.get(
   '/stadium-owners',
   authenticateToken,
   authorizeRoles(['superadmin']),
-  async (_req: Request, res: Response, next: NextFunction) => { // ✅ Now recognized
-    try {
-      const stadiumOwners = await User.find(
-        { role: 'stadium_owner' },
-        'firstName lastName email phone'
-      ).exec();
-
-      res.json({
-        success: true,
-        data: stadiumOwners
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
+  AuthController.getStadiumOwners
 );
 
 /**
@@ -228,18 +74,6 @@ router.get(
  *   name: Users
  *   description: Manage users (admin only)
  */
-
-// Middleware to check admin role
-const requireAdmin = (req: Request, res: Response, next: Function) => {
-  const user = (req as any).user;
-  if (user?.role !== 'superadmin') {
-    return res.status(403).json({
-      success: false,
-      message: 'ບໍ່ໄດ້ຮັບອະນຸຍາດ: ສະເພາະ ຜູ້ດູແລລະບົບ ເທົ່ານັ້ນ',
-    });
-  }
-  return next();
-};
 
 /**
  * @swagger
@@ -269,38 +103,7 @@ router.get('/users',
     query('page').optional().isInt({ min: 1 }).toInt(),
     query('limit').optional().isInt({ min: 1, max: 100 }).toInt(),
   ],
-  async (req: Request, res: Response) => {
-    try {
-      const page = typeof req.query.page === 'number' ? req.query.page : parseInt(req.query.page as string) || 1;
-      const limit = typeof req.query.limit === 'number' ? req.query.limit : parseInt(req.query.limit as string) || 10;
-      const skip = (page - 1) * limit;
-
-      const users = await User.find()
-        .select('-passwordHash')
-        .skip(skip)
-        .limit(limit)
-        .sort({ createdAt: -1 });
-
-      const total = await User.countDocuments();
-
-      res.json({
-        success: true,
-        data: users,
-        pagination: {
-          page,
-          limit,
-          total,
-          pages: Math.ceil(Number(total) / Number(limit)),
-        },
-      });
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message: 'Failed to fetch users',
-        error: error.message,
-      });
-    }
-  }
+  AuthController.getAllUsers
 );
 
 /**
@@ -338,48 +141,7 @@ router.put('/users/:id/status',
     param('id').isMongoId().withMessage('Invalid user ID'),
     body('status').isIn(['active', 'suspended', 'inactive']).withMessage('Invalid status'),
   ],
-  async (req: Request, res: Response) => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({
-          success: false,
-          message: 'Validation errors',
-          errors: errors.array(),
-        });
-      }
-
-      const { id } = req.params;
-      const { status } = req.body;
-
-      const user = await User.findByIdAndUpdate(
-        id,
-        { status },
-        { new: true, runValidators: true }
-      ).select('-passwordHash');
-
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: 'User not found',
-        });
-      }
-
-      res.json({
-        success: true,
-        message: `User status updated to ${status}`,
-        data: user,
-      });
-      return;
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message: 'Failed to update user status',
-        error: error.message,
-      });
-      return;
-    }
-  }
+  AuthController.updateUserStatus
 );
 
 /**
@@ -406,47 +168,7 @@ router.put('/users/:id/verify',
   [
     param('id').isMongoId().withMessage('Invalid user ID'),
   ],
-  async (req: Request, res: Response): Promise<void> => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        res.status(400).json({
-          success: false,
-          message: 'Validation errors',
-          errors: errors.array(),
-        });
-        return;
-      }
-
-      const user = await User.findByIdAndUpdate(
-        req.params.id,
-        { isVerified: true, verifiedAt: new Date() },
-        { new: true }
-      ).select('-passwordHash');
-
-      if (!user) {
-        res.status(404).json({
-          success: false,
-          message: 'User not found',
-        });
-        return;
-      }
-
-      res.json({
-        success: true,
-        message: 'User verified successfully',
-        data: user,
-      });
-      return;
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message: 'Failed to verify user',
-        error: error.message,
-      });
-      return;
-    }
-  }
+  AuthController.verifyUser
 );
 
 
@@ -493,7 +215,7 @@ router.put('/users/:id/verify',
  *         description: User created successfully
  */
 router.post(
-  '/auth/users',
+  '/users',
   authenticateToken,
   requireAdmin,
   [
@@ -505,54 +227,7 @@ router.post(
     body('role').optional().isIn(['general_user', 'stadium_owner']).withMessage('Invalid role'),
     body('status').optional().isIn(['active', 'suspended', 'inactive']),
   ],
-  async (req: Request, res: Response): Promise<void> => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        res.status(400).json({
-          success: false,
-          message: 'Validation errors',
-          errors: errors.array(),
-        });
-        return;
-      }
-
-      const { email, password, firstName, lastName, phone, role, status } = req.body;
-
-      const existingUser = await User.findOne({ email });
-      if (existingUser) {
-        res.status(400).json({
-          success: false,
-          message: 'User already exists with this email',
-        });
-        return;
-      }
-
-      const user = new User({
-        email,
-        passwordHash: password,
-        firstName,
-        lastName,
-        phone,
-        role: role || 'general_user',
-        status: status || 'active',
-      });
-
-      await user.save();
-
-      res.status(201).json({
-        success: true,
-        message: 'User created successfully',
-        user: user.toJSON(),
-      });
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message: 'Failed to create user',
-        error: error.message,
-      });
-    }
-  }
+  AuthController.createUser
 );
 
 
@@ -585,39 +260,7 @@ router.get(
   [
     param('id').isMongoId().withMessage('Invalid user ID'),
   ],
-  async (req: Request, res: Response): Promise<void> => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        res.status(400).json({
-          success: false,
-          message: 'Validation errors',
-          errors: errors.array(),
-        });
-        return;
-      }
-
-      const user = await User.findById(req.params.id).select('-passwordHash');
-      if (!user) {
-        res.status(404).json({
-          success: false,
-          message: 'User not found',
-        });
-        return;
-      }
-
-      res.json({
-        success: true,
-        user: user.toJSON(),
-      });
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message: 'Failed to fetch user',
-        error: error.message,
-      });
-    }
-  }
+  AuthController.getUserById
 );
 
 
@@ -671,48 +314,7 @@ router.patch(
     body('role').optional().isIn(['general_user', 'stadium_owner']).withMessage('Invalid role'),
     body('status').optional().isIn(['active', 'suspended', 'inactive']).withMessage('Invalid status'),
   ],
-  async (req: Request, res: Response): Promise<void> => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        res.status(400).json({
-          success: false,
-          message: 'Validation errors',
-          errors: errors.array(),
-        });
-        return;
-      }
-
-      const { id } = req.params;
-      const updates = req.body;
-
-      const user = await User.findByIdAndUpdate(
-        id,
-        updates,
-        { new: true, runValidators: true }
-      ).select('-passwordHash');
-
-      if (!user) {
-        res.status(404).json({
-          success: false,
-          message: 'User not found',
-        });
-        return;
-      }
-
-      res.json({
-        success: true,
-        message: 'User updated successfully',
-        user: user.toJSON(),
-      });
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message: 'Failed to update user',
-        error: error.message,
-      });
-    }
-  }
+  AuthController.updateUser
 );
 
 
@@ -768,72 +370,7 @@ router.put(
   '/users/:id',
   authenticateToken,
   requireAdmin,
-  async (req: Request, res: Response): Promise<void> => {
-    try {
-      const { id } = req.params;
-      const { firstName, lastName, phone, role, status, password } = req.body;
-
-      // ✅ No validation — build update object directly
-      const updateData: any = {};
-
-      // Only include fields if they are provided
-      if (firstName) updateData.firstName = firstName.trim();
-      if (lastName) updateData.lastName = lastName.trim();
-      if (phone) updateData.phone = phone.trim();
-      if (role) updateData.role = role; // ⚠️ No enum check
-      if (status) updateData.status = status; // ⚠️ No enum check
-      if (password) {
-        if (password.length < 6) {
-          res.status(400).json({
-            success: false,
-            message: 'Password must be at least 6 characters',
-          });
-          return;
-        }
-        updateData.passwordHash = password; // Mongoose pre-save should hash
-      }
-
-      // Ensure at least one field is being updated
-      if (Object.keys(updateData).length === 0) {
-        res.status(400).json({
-          success: false,
-          message: 'No valid fields to update',
-        });
-        return;
-      }
-
-      // Find and update user
-      const user = await User.findByIdAndUpdate(
-        id,
-        updateData,
-        { new: true, runValidators: true } // Still run schema validators
-      ).select('-passwordHash');
-
-      if (!user) {
-        res.status(404).json({
-          success: false,
-          message: 'User not found',
-        });
-        return;
-      }
-
-      res.json({
-        success: true,
-        message: 'User updated successfully',
-        user: user.toJSON(),
-      });
-      return;
-
-    } catch (error: any) {
-      console.error('Error updating user:', error); // Log for debugging
-      res.status(500).json({
-        success: false,
-        message: 'Failed to update user',
-        error: error.message,
-      });
-      return;
-    }
-  }
+  AuthController.replaceUser
 );
 
 

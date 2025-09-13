@@ -1,9 +1,12 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { body, query, validationResult } from 'express-validator';
-import Stadium from '../models/Stadium';
+import { StadiumController } from '../controllers/stadium.controller';
 import { authenticateToken, authorizeRoles } from '../middleware/auth';
 import { uploadStadiumImages } from '../middleware/upload';
+import Stadium from '../models/Stadium';
+import User from '../models/User';
 import multer from 'multer';
+
 
 const router = Router();
 
@@ -92,7 +95,6 @@ const router = Router();
  */
 router.get(
   '/',
-    
   [
     query('city').optional().trim(),
     query('page').optional().isInt({ min: 1 }),
@@ -100,8 +102,6 @@ router.get(
     query('lat').optional().isFloat(),
     query('lng').optional().isFloat(),
     query('radius').optional().isFloat(),
-
-    // ✅ Sorting validation
     query('sort')
       .optional()
       .isIn(['name', 'createdAt', 'capacity', 'averageRating'])
@@ -111,82 +111,9 @@ router.get(
       .isIn(['asc', 'desc'])
       .withMessage('Order must be "asc" or "desc"'),
   ],
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({
-          success: false,
-          errors: errors.array(),
-        });
-      }
-
-      const page = Math.max(1, parseInt(req.query.page as string) || 1);
-      const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 10));
-      const skip = (page - 1) * limit;
-
-      let dbQuery: any = { status: 'active' };
-
-      // Location-based search
-      const lat = req.query.lat ? parseFloat(req.query.lat as string) : null;
-      const lng = req.query.lng ? parseFloat(req.query.lng as string) : null;
-      if (lat !== null && lng !== null) {
-        const radius = parseFloat(req.query.radius as string) || 10; // km
-        dbQuery['address.coordinates'] = {
-          $near: {
-            $geometry: {
-              type: 'Point',
-              coordinates: [lng, lat],
-            },
-            $maxDistance: radius * 1000,
-          },
-        };
-      }
-
-      // City filter
-      if (req.query.city) {
-        dbQuery['address.city'] = new RegExp(req.query.city as string, 'i');
-      }
-
-      // ✅ Sorting logic
-      const sortField = (req.query.sort as string) || 'stats.averageRating';
-      const sortOrder = (req.query.order as string) === 'asc' ? 1 : -1;
-
-      const sortOptions: Record<string, any> = {
-        name: { name: sortOrder },
-        createdAt: { createdAt: sortOrder },
-        capacity: { capacity: sortOrder },
-        averageRating: { 'stats.averageRating': sortOrder },
-      };
-
-      const dbSort = sortOptions[sortField] || { 'stats.averageRating': -1 };
-
-      const stadiums = await Stadium.find(dbQuery)
-        .populate('ownerId', 'firstName lastName email')
-        .select('-staff.bankAccountDetails')
-        .skip(skip)
-        .limit(limit)
-        .sort(dbSort)
-        .exec();
-
-      const total = await Stadium.countDocuments(dbQuery);
-      const totalPages = Math.ceil(total / limit);
-
-      return res.json({
-        success: true,
-        data: stadiums,
-        pagination: {
-          page,
-          limit,
-          total,
-          pages: totalPages,
-        },
-      });
-    } catch (error) {
-      return next(error);
-    }
-  }
+  StadiumController.getAllStadiums
 );
+
 
 /**
  * @swagger
@@ -203,32 +130,12 @@ router.get(
 router.get('/my-stadiums', [
   authenticateToken,
   authorizeRoles(['stadium_owner', 'superadmin'])
-], async (req: Request, res: Response, next: NextFunction) => { // ✅ Use Request here
-  try {
-    let query: any = {};
-
-    if (req.user?.role === 'stadium_owner') {
-      query.ownerId = req.user.userId;
-    }
-
-    const stadiums = await Stadium.find(query)
-      .populate('ownerId', 'firstName lastName email')
-      .select('-staff.bankAccountDetails')
-      .exec();
-
-    res.json({
-      success: true,
-      data: stadiums
-    });
-  } catch (error) {
-    next(error);
-  }
-});
+], StadiumController.getMyStadiums);
 /**
  * @swagger
  * /api/stadiums:
  *   post:
- *     summary: Create a new stadium with images (owner/admin only)
+ *     summary: Create a new stadium with optional owner assignment
  *     tags: [Stadiums]
  *     security:
  *       - bearerAuth: []
@@ -245,56 +152,26 @@ router.get('/my-stadiums', [
  *             properties:
  *               name:
  *                 type: string
- *                 example: Vientiane Sports Arena
  *               description:
  *                 type: string
- *                 example: A modern football complex with floodlights.
+ *               assignedOwnerId:
+ *                 type: string
+ *                 description: ID of stadium owner to assign this stadium to (superadmin only)
  *               address:
  *                 type: string
- *                 example: '{"city": "Vientiane", "coordinates": [102.6, 17.9]}'
- *                 description: Address as a valid JSON string. Must include city and coordinates array [longitude, latitude]
  *               capacity:
  *                 type: integer
- *                 minimum: 1
- *                 example: 3000
  *               facilities:
  *                 type: string
- *                 example: '{"parking": true, "changingRooms": 2}'
- *                 description: Optional facilities as JSON string.
  *               fields:
  *                 type: string
- *                 example: '[{"name": "Field 1", "fieldType": "7v7", "surfaceType": "artificial_grass", "pricing": {"baseHourlyRate": 400000}}]'
- *                 description: Array of fields as JSON string.
  *               status:
  *                 type: string
- *                 enum: [active, inactive, maintenance]
- *                 default: active
  *               images:
  *                 type: array
  *                 items:
  *                   type: string
  *                   format: binary
- *                 description: Upload up to 5 images (JPEG, PNG, WEBP, max 5MB each)
- *     responses:
- *       201:
- *         description: Stadium created successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 message:
- *                   type: string
- *                 data:
- *                   $ref: '#/components/schemas/Stadium'
- *       400:
- *         description: Validation error or invalid JSON
- *       403:
- *         description: Unauthorized access
- *       500:
- *         description: Internal server error
  */
 router.post(
   '/',
@@ -322,7 +199,6 @@ router.post(
           }
           
           const [lng, lat] = addr.coordinates;
-          // Validate Laos coordinates range
           if (lng < 100 || lng > 108 || lat < 13 || lat > 23) {
             throw new Error('Coordinates must be within Laos range: longitude 100-108, latitude 13-23');
           }
@@ -344,10 +220,34 @@ router.post(
         });
       }
 
+      // Determine the owner ID
+      let ownerId;
+      
+      // If superadmin is assigning to a specific owner
+      if (req.user?.role === 'superadmin' && req.body.assignedOwnerId) {
+        // Validate that the assigned owner exists and is a stadium owner
+        const assignedOwner = await User.findOne({
+          _id: req.body.assignedOwnerId,
+          role: 'stadium_owner'
+        });
+        
+        if (!assignedOwner) {
+          return res.status(400).json({
+            success: false,
+            message: 'Assigned owner not found or is not a stadium owner'
+          });
+        }
+        
+        ownerId = req.body.assignedOwnerId;
+      } else {
+        // Use the current user's ID
+        ownerId = req.user?.userId;
+      }
+
       const files = (req as any).files as Express.Multer.File[] | undefined;
       const imagePaths = files?.map(file => `/uploads/stadiums/${file.filename}`) || [];
 
-      // Helper function to parse JSON fields with better error handling
+      // Helper function to parse JSON fields
       const parseField = (fieldName: string, fieldValue: any, required = false): any => {
         if (!fieldValue) {
           if (required) {
@@ -407,7 +307,7 @@ router.post(
         };
 
         const stadiumData = {
-          ownerId: req.user?.userId,
+          ownerId,
           name: req.body.name,
           description: req.body.description,
           address: formattedAddress,
@@ -442,7 +342,6 @@ router.post(
         });
       }
       
-      // Handle MongoDB validation errors
       if (error.name === 'ValidationError') {
         const errors = Object.values(error.errors).map((err: any) => ({
           field: err.path,
@@ -659,36 +558,7 @@ router.post(
  */
 router.get(
   '/:id',
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { id } = req.params;
-
-      const stadium = await Stadium.findById(id)
-        .populate('ownerId', 'firstName lastName email phone')
-        .select('-staff.bankAccountDetails') // Hide sensitive fields
-        .exec();
-
-      if (!stadium) {
-        return res.status(404).json({
-          success: false,
-          message: 'Stadium not found',
-        });
-      }
-
-      return res.json({
-        success: true,
-        data: stadium,
-      });
-    } catch (error: any) {
-      if (error.name === 'CastError' && error.path === '_id') {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid stadium ID format',
-        });
-      }
-      return next(error);
-    }
-  }
+  StadiumController.getStadiumById
 );
 
 
@@ -959,122 +829,7 @@ router.delete(
     authenticateToken,
     authorizeRoles(['stadium_owner', 'superadmin']),
   ],
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { id } = req.params;
-
-      const stadium = await Stadium.findById(id);
-      if (!stadium) {
-        return res.status(404).json({
-          success: false,
-          message: 'Stadium not found',
-        });
-      }
-
-      // Authorization: Only owner or superadmin can delete
-      if (req.user?.role !== 'superadmin' && stadium.ownerId.toString() !== req.user?.userId) {
-        return res.status(403).json({
-          success: false,
-          message: 'Not authorized to delete this stadium',
-        });
-      }
-
-      // Soft delete: update status to inactive
-      stadium.status = 'inactive';
-      await stadium.save();
-
-      return res.json({
-        success: true,
-        message: 'Stadium deleted successfully (deactivated)',
-      });
-    } catch (error: any) {
-      if (error.name === 'CastError' && error.path === '_id') {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid stadium ID format',
-        });
-      }
-      return next(error);
-    }
-  }
-);
-
-/**
- * @swagger
- * /api/stadiums/{id}:
- *   delete:
- *     summary: Permanently delete a stadium (superadmin or owner only)
- *     tags: [Stadiums]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         schema:
- *           type: string
- *         required: true
- *         description: Stadium ID
- *     responses:
- *       200:
- *         description: Stadium permanently deleted
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 message:
- *                   type: string
- *       403:
- *         description: Not authorized
- *       404:
- *         description: Stadium not found
- *       500:
- *         description: Server error
- */
-router.delete(
-  '/:id',
-  [
-    authenticateToken,
-    authorizeRoles(['stadium_owner', 'superadmin']),
-  ],
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { id } = req.params;
-
-      const stadium = await Stadium.findById(id);
-      if (!stadium) {
-        return res.status(404).json({
-          success: false,
-          message: 'Stadium not found',
-        });
-      }
-
-      // Authorization check
-      if (req.user?.role !== 'superadmin' && stadium.ownerId.toString() !== req.user?.userId) {
-        return res.status(403).json({
-          success: false,
-          message: 'Not authorized to delete this stadium',
-        });
-      }
-
-      await Stadium.deleteOne({ _id: id });
-
-      return res.json({
-        success: true,
-        message: 'Stadium permanently deleted',
-      });
-    } catch (error: any) {
-      if (error.name === 'CastError') {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid stadium ID format',
-        });
-      }
-      return next(error);
-    }
-  }
+  StadiumController.deleteStadium
 );
 
 export default router;

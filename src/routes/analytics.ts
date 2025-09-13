@@ -1,18 +1,41 @@
-import { Router, Request, Response, NextFunction } from 'express';
-import moment from 'moment-timezone';
-import Booking from '../models/Booking';
-import Stadium from '../models/Stadium';
+import { Router } from 'express';
+import { AnalyticsController } from '../controllers/analytics.controller';
 import { authenticateToken, authorizeRoles } from '../middleware/auth';
-import mongoose from 'mongoose';
 
 const router = Router();
 
 /**
  * @swagger
- * tags:
- *   name: Analytics
- *   description: Analytics endpoints for stadium owners and admins
+ * /api/analytics:
+ *   get:
+ *     summary: Get general analytics (admin only)
+ *     tags: [Analytics]
+ *     security:
+ *       - bearerAuth: []
  */
+router.get('/', authenticateToken, authorizeRoles(['superadmin']), AnalyticsController.getAnalytics);
+
+/**
+ * @swagger
+ * /api/analytics/stadium-owner:
+ *   get:
+ *     summary: Get stadium owner analytics
+ *     tags: [Analytics]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.get('/stadium-owner', authenticateToken, authorizeRoles(['stadium_owner', 'superadmin']), AnalyticsController.getStadiumOwnerAnalytics);
+
+/**
+ * @swagger
+ * /api/analytics/bookings:
+ *   get:
+ *     summary: Get booking analytics
+ *     tags: [Analytics]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.get('/bookings', authenticateToken, authorizeRoles(['superadmin', 'stadium_owner']), AnalyticsController.getBookingAnalytics);
 
 /**
  * @swagger
@@ -110,132 +133,6 @@ const router = Router();
  *       500:
  *         description: Failed to get analytics
  */
-router.get('/stadiums/:stadiumId', authenticateToken, authorizeRoles(['superadmin', 'stadium_owner']), async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { stadiumId } = req.params;
-    const { startDate, endDate } = req.query;
-
-    // Check access rights
-    const stadium = await Stadium.findById(stadiumId);
-    if (!stadium) {
-      return res.status(404).json({
-        success: false,
-        message: 'Stadium not found'
-      });
-    }
-
-    if (req.user?.role !== 'superadmin' && stadium.ownerId.toString() !== req.user?.userId) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to view this stadium analytics'
-      });
-    }
-
-    const start = moment(startDate as string || moment().subtract(30, 'days')).startOf('day');
-    const end = moment(endDate as string || moment()).endOf('day');
-
-    // Aggregate booking analytics
-    const analytics = await Booking.aggregate([
-      {
-        $match: {
-          stadiumId: new mongoose.Types.ObjectId(stadiumId),
-          bookingDate: {
-            $gte: start.toDate(),
-            $lte: end.toDate()
-          }
-        }
-      },
-      {
-        $group: {
-          _id: {
-            date: { $dateToString: { format: '%Y-%m-%d', date: '$bookingDate' } },
-            status: '$status'
-          },
-          count: { $sum: 1 },
-          revenue: { $sum: '$pricing.totalAmount' },
-          refereeRevenue: { $sum: { $sum: '$pricing.refereeCharges.total' } }
-        }
-      },
-      {
-        $group: {
-          _id: '$_id.date',
-          totalBookings: { $sum: '$count' },
-          totalRevenue: { $sum: '$revenue' },
-          totalRefereeRevenue: { $sum: '$refereeRevenue' },
-          statusBreakdown: {
-            $push: {
-              status: '$_id.status',
-              count: '$count'
-            }
-          }
-        }
-      },
-      {
-        $sort: { _id: 1 }
-      }
-    ]);
-
-    // Staff performance analytics
-    const staffAnalytics = await Booking.aggregate([
-      {
-        $match: {
-          stadiumId: new mongoose.Types.ObjectId(stadiumId),
-          bookingDate: {
-            $gte: start.toDate(),
-            $lte: end.toDate()
-          },
-          'assignedStaff.role': 'referee'
-        }
-      },
-      {
-        $unwind: '$assignedStaff'
-      },
-      {
-        $match: {
-          'assignedStaff.role': 'referee'
-        }
-      },
-      {
-        $group: {
-          _id: '$assignedStaff.staffId',
-          refereeName: { $first: '$assignedStaff.staffName' },
-          totalBookings: { $sum: 1 },
-          totalHours: { $sum: '$durationHours' },
-          totalEarnings: { 
-            $sum: {
-              $reduce: {
-                input: '$pricing.refereeCharges',
-                initialValue: 0,
-                in: {
-                  $cond: [
-                    { $eq: ['$$this.staffId', '$assignedStaff.staffId'] },
-                    { $add: ['$$value', '$$this.total'] },
-                    '$$value'
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    ]);
-
-    res.json({
-      success: true,
-      data: {
-        dailyAnalytics: analytics,
-        staffPerformance: staffAnalytics,
-        summary: {
-          totalBookings: analytics.reduce((sum: number, day: any) => sum + day.totalBookings, 0),
-          totalRevenue: analytics.reduce((sum: number, day: any) => sum + day.totalRevenue, 0),
-          totalRefereeRevenue: analytics.reduce((sum: number, day: any) => sum + day.totalRefereeRevenue, 0),
-          currency: 'LAK'
-        }
-      }
-    });
-  } catch (error) {
-    return next(error);
-  }
-});
+router.get('/stadiums/:stadiumId', authenticateToken, authorizeRoles(['superadmin', 'stadium_owner']), AnalyticsController.getStadiumAnalytics);
 
 export default router;
