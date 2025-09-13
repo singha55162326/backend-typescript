@@ -41,7 +41,8 @@ app.use(helmet());
 app.use(cors({
   origin: [
     'http://localhost:3000',
-    'http://localhost:8080' // Vite dev server
+    'http://localhost:8080',
+     // Vite dev server
   ],
   credentials: true,
 }));
@@ -81,9 +82,9 @@ app.use('/api/analytics', authenticateToken, authorizeRoles(['superadmin', 'stad
 
 
 
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+
+app.use('/uploads', express.static(path.join(__dirname, './uploads'), {
   setHeaders: (res, _path) => {
-    // Set proper CORS headers for images
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   }
