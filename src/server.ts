@@ -38,15 +38,28 @@ SchedulerService.init();
 
 // Security middleware
 app.use(helmet());
+// CORS setup
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:8080',
+  'https://web-admin1-git-main-singha25331s-projects.vercel.app'
+];
+
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:8080',
-    'https://web-admin1-git-main-singha25331s-projects.vercel.app/' // Vite dev server
-     // Vite dev server
-  ],
-  credentials: true,
+  origin: allowedOrigins,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true
 }));
+
+// Handle preflight requests
+app.options(/(.*)/, cors({
+  origin: allowedOrigins,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true
+}));
+
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
