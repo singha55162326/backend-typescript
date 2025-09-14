@@ -46,19 +46,24 @@ const allowedOrigins = [
 ];
 
 app.use(cors({
-  origin: allowedOrigins,
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  credentials: true
+  credentials: true,
+  optionsSuccessStatus: 204
 }));
 
-// Handle preflight requests
-app.options(/(.*)/, cors({
-  origin: allowedOrigins,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  credentials: true
-}));
+// ❌ remove this line completely
+// app.options('*', cors());
+
+// ✅ or if you want it explicit, use this instead in Express 5:
+app.options('/*splat', cors());
 
 
 const limiter = rateLimit({
