@@ -42,7 +42,7 @@ app.use(helmet());
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:8080',
-  'https://stadium-booking.netlify.app/'
+  'https://stadium-booking.netlify.app'
 ];
 
 app.use(cors({
