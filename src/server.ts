@@ -42,7 +42,7 @@ app.use(helmet());
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:8080',
-  'https://web-admin1-git-main-singha25331s-projects.vercel.app/login/'
+  'https://stadium-booking.netlify.app/'
 ];
 
 app.use(cors({
