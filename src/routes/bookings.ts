@@ -153,6 +153,84 @@ const router = Router();
  *           type: string
  *           format: date-time
  *     
+ *     InvoiceItem:
+ *       type: object
+ *       properties:
+ *         description:
+ *           type: string
+ *         quantity:
+ *           type: number
+ *         unitPrice:
+ *           type: number
+ *         total:
+ *           type: number
+ *     
+ *     Invoice:
+ *       type: object
+ *       properties:
+ *         invoiceNumber:
+ *           type: string
+ *         invoiceDate:
+ *           type: string
+ *           format: date-time
+ *         dueDate:
+ *           type: string
+ *           format: date-time
+ *         booking:
+ *           type: object
+ *           properties:
+ *             bookingNumber:
+ *               type: string
+ *             bookingDate:
+ *               type: string
+ *               format: date
+ *             startTime:
+ *               type: string
+ *             endTime:
+ *               type: string
+ *             durationHours:
+ *               type: number
+ *         customer:
+ *           type: object
+ *           properties:
+ *             customerId:
+ *               type: string
+ *             name:
+ *               type: string
+ *             email:
+ *               type: string
+ *             phone:
+ *               type: string
+ *         stadium:
+ *           type: object
+ *           properties:
+ *             stadiumId:
+ *               type: string
+ *             name:
+ *               type: string
+ *             address:
+ *               type: string
+ *             phone:
+ *               type: string
+ *             ownerId:
+ *               type: string
+ *         items:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/InvoiceItem'
+ *         subtotal:
+ *           type: number
+ *         taxes:
+ *           type: number
+ *         totalAmount:
+ *           type: number
+ *         currency:
+ *           type: string
+ *         paymentStatus:
+ *           type: string
+ *         notes:
+ *           type: string
+ *     
  *     Booking:
  *       type: object
  *       properties:
@@ -1051,6 +1129,44 @@ router.get('/field/:stadiumId/:fieldId/availability', [
  *       404:
  *         description: Stadium or field not found
  */
+/**
+ * @swagger
+ * /api/bookings/{bookingId}/invoice:
+ *   get:
+ *     summary: Generate invoice for a booking
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: bookingId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Booking ID
+ *     responses:
+ *       200:
+ *         description: Invoice data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   $ref: '#/components/schemas/Invoice'
+ *       400:
+ *         description: Invalid booking ID
+ *       403:
+ *         description: Access denied
+ *       404:
+ *         description: Booking not found
+ *       500:
+ *         description: Failed to generate invoice
+ */
+router.get('/:bookingId/invoice', authenticateToken, BookingController.generateInvoice);
+
 router.get('/field/:stadiumId/:fieldId/check-slot', [
   query('date').notEmpty().isISO8601(),
   query('startTime').matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),

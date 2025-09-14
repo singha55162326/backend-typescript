@@ -3,10 +3,12 @@ import { Request, Response, NextFunction } from 'express';
 import { validationResult } from 'express-validator';
 import Booking from '../models/Booking';
 import Stadium from '../models/Stadium';
+import User from '../models/User';
 import moment from 'moment-timezone';
 import mongoose from 'mongoose';
 import { IPayment } from '../types/booking.types';
 import AvailabilityService from '../utils/availability';
+import { InvoiceService } from '../services/invoice.service';
 
 export class BookingController {
   /**
@@ -923,6 +925,59 @@ static async getAllBookings(req: Request, res: Response, next: NextFunction): Pr
             isSpecialDate: false
           }
         }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Generate invoice for a booking
+   */
+  static async generateInvoice(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { bookingId } = req.params;
+
+      if (!mongoose.isValidObjectId(bookingId)) {
+        res.status(400).json({ success: false, message: 'Invalid booking ID' });
+        return;
+      }
+
+      // Find the booking
+      const booking = await Booking.findById(bookingId)
+        .populate('userId', 'firstName lastName email phone')
+        .populate('stadiumId', 'name address ownerId');
+
+      if (!booking) {
+        res.status(404).json({ success: false, message: 'Booking not found' });
+        return;
+      }
+
+      // Authorization: Only owner, stadium owner or admin can generate invoice
+      const isBookingOwner = booking.userId.toString() === req.user?.userId;
+      const isStadiumOwner = (booking.stadiumId as any).ownerId.toString() === req.user?.userId;
+      const isAdmin = req.user?.role === 'superadmin';
+
+      if (!isBookingOwner && !isStadiumOwner && !isAdmin) {
+        res.status(403).json({ success: false, message: 'Access denied' });
+        return;
+      }
+
+      // Get customer and stadium details
+      const customer = await User.findById(booking.userId);
+      const stadium = await Stadium.findById(booking.stadiumId);
+
+      if (!customer || !stadium) {
+        res.status(404).json({ success: false, message: 'Customer or stadium not found' });
+        return;
+      }
+
+      // Generate invoice data
+      const invoiceData = InvoiceService.generateInvoiceData(booking, stadium, customer);
+
+      res.json({
+        success: true,
+        data: invoiceData
       });
     } catch (error) {
       next(error);

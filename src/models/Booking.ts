@@ -106,7 +106,7 @@ const discountSchema = new Schema<IDiscount>({
 const paymentSchema = new Schema<IPayment>({
   paymentMethod: {
     type: String,
-    enum: ['credit_card', 'debit_card', 'bank_transfer', 'digital_wallet', 'cash'],
+    enum: ['credit_card', 'qrcode', 'bank_transfer', 'digital_wallet', 'cash'],
     required: true
   },
   amount: { type: Number, required: true },
