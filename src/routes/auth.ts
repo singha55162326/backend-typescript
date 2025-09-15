@@ -374,5 +374,19 @@ router.put(
 );
 
 
+// Login customer with phone number
+router.post('/customer/login', [
+  body('phone')
+    .isMobilePhone('any')
+    .withMessage('Please enter a valid phone number')
+    .trim()
+    .escape(),
+  body('password')
+    .isLength({ min: 1 })
+    .withMessage('Password is required')
+], AuthController.phoneLogin);
+
+
+
 
 export default router;

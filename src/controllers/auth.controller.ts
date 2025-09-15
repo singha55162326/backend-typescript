@@ -520,4 +520,61 @@ export class AuthController {
       next(error);
     }
   }
+
+  static async phoneLogin(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        res.status(400).json({
+          success: false,
+          message: 'Validation errors',
+          errors: errors.array()
+        });
+        return;
+      }
+
+      const { phone, password } = req.body;
+      const user = await User.findOne({ phone });
+      if (!user) {
+        res.status(401).json({
+          success: false,
+          message: 'Invalid credentials'
+        });
+        return;
+      }
+
+      const isMatch = await user.comparePassword(password);
+      if (!isMatch) {
+        res.status(401).json({
+          success: false,
+          message: 'Invalid credentials'
+        });
+        return;
+      }
+
+      if (user.status !== 'active') {
+        res.status(403).json({
+          success: false,
+          message: 'Account is inactive or suspended'
+        });
+        return;
+      }
+
+      const token = jwt.sign(
+        { userId: user._id, role: user.role },
+        process.env.JWT_SECRET || 'your-secret-key',
+        { expiresIn: '7d' }
+      );
+
+      res.json({
+        success: true,
+        message: 'Login successful',
+        token,
+        user: user.toJSON()
+      });
+    } catch (error: any) {
+      next(error);
+    }
+  }
+  
 }
