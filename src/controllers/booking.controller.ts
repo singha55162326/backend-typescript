@@ -359,86 +359,93 @@ static async getAllBookings(req: Request, res: Response, next: NextFunction): Pr
   /**
    * Cancel a booking
    */
-  static async cancelBooking(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const booking = await Booking.findById(req.params.bookingId);
-      if (!booking) {
-        res.status(404).json({
-          success: false,
-          message: 'Booking not found'
-        });
-        return;
-      }
-
-      // Check ownership
-      if (booking.userId.toString() !== req.user?.userId && req.user?.role !== 'superadmin') {
-        res.status(403).json({
-          success: false,
-          message: 'Not authorized to cancel this booking'
-        });
-        return;
-      }
-
-      // Check if cancellation is allowed
-      const bookingDateTime = moment.tz(
-        `${booking.bookingDate.toISOString().split('T')[0]} ${booking.startTime}`,
-        'YYYY-MM-DD HH:mm',
-        'Asia/Vientiane'
-      );
-      const now = moment.tz('Asia/Vientiane');
-      const hoursUntilBooking = bookingDateTime.diff(now, 'hours');
-
-      if (hoursUntilBooking < 24 && req.user?.role !== 'stadium_owner') {
-        res.status(400).json({
-          success: false,
-          message: 'Bookings can only be cancelled 24 hours in advance'
-        });
-        return;
-      }
-
-      // Calculate refund
-      let refundAmount = 0;
-      if (booking.paymentStatus === 'paid') {
-        if (hoursUntilBooking >= 48) {
-          refundAmount = booking.pricing.totalAmount; // Full refund
-        } else if (hoursUntilBooking >= 24) {
-          refundAmount = booking.pricing.totalAmount * 0.5; // 50% refund
-        }
-      }
-
-      // Update booking
-      booking.status = 'cancelled';
-      booking.cancellation = {
-        cancelledAt: new Date(),
-        cancelledBy: new mongoose.Types.ObjectId(req.user?.userId),
-        reason: req.body.reason || 'User cancellation',
-        refundAmount,
-        refundStatus: refundAmount > 0 ? 'pending' : 'not_applicable'
-      };
-
-      booking.history.push({
-        action: 'cancelled',
-        changedBy: new mongoose.Types.ObjectId(req.user?.userId),
-        oldValues: { status: booking.status },
-        newValues: { status: 'cancelled' },
-        notes: req.body.reason || 'User cancellation'
-      } as any);
-
-      await booking.save();
-
-      res.json({
-        success: true,
-        message: 'Booking cancelled successfully',
-        data: {
-          booking,
-          refundAmount
-        }
+ static async cancelBooking(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const booking = await Booking.findById(req.params.bookingId);
+    if (!booking) {
+      res.status(404).json({
+        success: false,
+        message: 'Booking not found'
       });
-    } catch (error) {
-      next(error);
+      return;
     }
-  }
 
+    // Check ownership - allow general users to cancel their own bookings
+    const isOwner = booking.userId.toString() === req.user?.userId;
+    const isSuperAdmin = req.user?.role === 'superadmin';
+    const isStadiumOwner = req.user?.role === 'stadium_owner';
+    
+    if (!isOwner && !isSuperAdmin && !isStadiumOwner) {
+      res.status(403).json({
+        success: false,
+        message: 'Not authorized to cancel this booking'
+      });
+      return;
+    }
+
+    // Check if cancellation is allowed
+    const bookingDateTime = moment.tz(
+      `${booking.bookingDate.toISOString().split('T')[0]} ${booking.startTime}`,
+      'YYYY-MM-DD HH:mm',
+      'Asia/Vientiane'
+    );
+    const now = moment.tz('Asia/Vientiane');
+    const hoursUntilBooking = bookingDateTime.diff(now, 'hours');
+
+    // Allow stadium owners and superadmins to cancel anytime
+    const isPrivilegedUser = isStadiumOwner || isSuperAdmin;
+    
+    if (hoursUntilBooking < 24 && !isPrivilegedUser) {
+      res.status(400).json({
+        success: false,
+        message: 'Bookings can only be cancelled 24 hours in advance'
+      });
+      return;
+    }
+
+    // Calculate refund
+    let refundAmount = 0;
+    if (booking.paymentStatus === 'paid') {
+      if (hoursUntilBooking >= 48) {
+        refundAmount = booking.pricing.totalAmount; // Full refund
+      } else if (hoursUntilBooking >= 24) {
+        refundAmount = booking.pricing.totalAmount * 0.5; // 50% refund
+      }
+      // No refund if less than 24 hours (for regular users)
+    }
+
+    // Update booking
+    booking.status = 'cancelled';
+    booking.cancellation = {
+      cancelledAt: new Date(),
+      cancelledBy: new mongoose.Types.ObjectId(req.user?.userId),
+      reason: req.body.reason || 'User cancellation',
+      refundAmount,
+      refundStatus: refundAmount > 0 ? 'pending' : 'not_applicable'
+    };
+
+    booking.history.push({
+      action: 'cancelled',
+      changedBy: new mongoose.Types.ObjectId(req.user?.userId),
+      oldValues: { status: booking.status },
+      newValues: { status: 'cancelled' },
+      notes: req.body.reason || 'User cancellation'
+    } as any);
+
+    await booking.save();
+
+    res.json({
+      success: true,
+      message: 'Booking cancelled successfully',
+      data: {
+        booking,
+        refundAmount
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+}
   /**
    * Confirm a booking (Admin only)
    */
@@ -946,7 +953,13 @@ static async getAllBookings(req: Request, res: Response, next: NextFunction): Pr
       // Find the booking
       const booking = await Booking.findById(bookingId)
         .populate('userId', 'firstName lastName email phone')
-        .populate('stadiumId', 'name address ownerId');
+        .populate({
+          path: 'stadiumId',
+          populate: {
+            path: 'ownerId',
+            select: 'firstName lastName'
+          }
+        });
 
       if (!booking) {
         res.status(404).json({ success: false, message: 'Booking not found' });
@@ -965,7 +978,7 @@ static async getAllBookings(req: Request, res: Response, next: NextFunction): Pr
 
       // Get customer and stadium details
       const customer = await User.findById(booking.userId);
-      const stadium = await Stadium.findById(booking.stadiumId);
+      const stadium = await Stadium.findById(booking.stadiumId).populate('ownerId', 'firstName lastName');
 
       if (!customer || !stadium) {
         res.status(404).json({ success: false, message: 'Customer or stadium not found' });

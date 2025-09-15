@@ -10,6 +10,7 @@ export interface IInvoiceItem {
   total: number;
 }
 
+// Updated interface to include optional ownerName
 export interface IInvoiceData {
   invoiceNumber: string;
   invoiceDate: Date;
@@ -33,6 +34,7 @@ export interface IInvoiceData {
     address: string;
     phone: string;
     ownerId: string;
+    ownerName?: string; // Make ownerName optional
   };
   items: IInvoiceItem[];
   subtotal: number;
@@ -92,6 +94,13 @@ export class InvoiceService {
     const taxes = booking.pricing.taxes || 0;
     const totalAmount = subtotal + taxes;
 
+    // Check if stadium owner is populated with name details
+    let ownerName = undefined;
+    if (stadium.ownerId && typeof stadium.ownerId === 'object' && 'firstName' in stadium.ownerId) {
+      const populatedOwner = stadium.ownerId as any;
+      ownerName = `${populatedOwner.firstName} ${populatedOwner.lastName}`;
+    }
+
     return {
       invoiceNumber,
       invoiceDate,
@@ -114,7 +123,8 @@ export class InvoiceService {
         name: stadium.name,
         address: `${stadium.address.street || ''} ${stadium.address.city}, ${stadium.address.country}`,
         phone: '', // Optional, stadium doesn't have phone
-        ownerId: stadium.ownerId.toString()
+        ownerId: stadium.ownerId.toString(), // Keep the ID for reference
+        ownerName: ownerName // Add owner name if available
       },
       items,
       subtotal,
