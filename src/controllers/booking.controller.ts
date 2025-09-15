@@ -3,10 +3,12 @@ import { Request, Response, NextFunction } from 'express';
 import { validationResult } from 'express-validator';
 import Booking from '../models/Booking';
 import Stadium from '../models/Stadium';
+import User from '../models/User';
 import moment from 'moment-timezone';
 import mongoose from 'mongoose';
 import { IPayment } from '../types/booking.types';
 import AvailabilityService from '../utils/availability';
+import { InvoiceService } from '../services/invoice.service';
 
 export class BookingController {
   /**
@@ -208,70 +210,110 @@ export class BookingController {
   /**
    * Get all bookings (Admin only)
    */
-  static async getAllBookings(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      // Check if user is admin
-      if (req.user?.role !== 'superadmin') {
-        res.status(403).json({
-          success: false,
-          message: 'Admin access required to view all bookings'
+  /**
+ * Get all bookings (Admin and Stadium Owner access)
+ */
+static async getAllBookings(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const skip = (page - 1) * limit;
+
+    // Build query based on filters and user role
+    let query: any = {};
+
+    // For stadium owners, only show bookings for their stadiums
+    if (req.user?.role === 'stadium_owner') {
+      // Get stadiums owned by this user
+      const userStadiums = await Stadium.find({ ownerId: req.user.userId }).select('_id');
+      const stadiumIds = userStadiums.map(stadium => stadium._id);
+      
+      if (stadiumIds.length === 0) {
+        // User doesn't own any stadiums
+        res.json({
+          success: true,
+          data: [],
+          pagination: {
+            page,
+            limit,
+            total: 0,
+            pages: 0
+          }
         });
         return;
       }
-
-      const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 20;
-      const skip = (page - 1) * limit;
-
-      // Build query based on filters
-      let query: any = {};
-
-      if (req.query.status) {
-        query.status = req.query.status;
-      }
-
-      if (req.query.stadiumId) {
-        query.stadiumId = req.query.stadiumId;
-      }
-
-      if (req.query.userId) {
-        query.userId = req.query.userId;
-      }
-
-      if (req.query.startDate || req.query.endDate) {
-        query.bookingDate = {};
-        if (req.query.startDate) {
-          query.bookingDate.$gte = new Date(req.query.startDate as string);
-        }
-        if (req.query.endDate) {
-          query.bookingDate.$lte = new Date(req.query.endDate as string);
-        }
-      }
-
-      const bookings = await Booking.find(query)
-        .populate('userId', 'name email phone')
-        .populate('stadiumId', 'name address')
-        .populate('fieldId', 'fieldName type')
-        .sort({ createdAt: -1, bookingDate: -1 })
-        .skip(skip)
-        .limit(limit);
-
-      const total = await Booking.countDocuments(query);
-
-      res.json({
-        success: true,
-        data: bookings,
-        pagination: {
-          page,
-          limit,
-          total,
-          pages: Math.ceil(total / limit)
-        }
+      
+      query.stadiumId = { $in: stadiumIds };
+    } 
+    // For regular users, deny access to all bookings
+    else if (req.user?.role !== 'superadmin') {
+      res.status(403).json({
+        success: false,
+        message: 'Admin or stadium owner access required to view all bookings'
       });
-    } catch (error) {
-      next(error);
+      return;
     }
+
+    // Apply filters
+    if (req.query.status) {
+      query.status = req.query.status;
+    }
+
+    if (req.query.stadiumId) {
+      // For stadium owners, ensure they can only filter by their own stadiums
+      if (req.user?.role === 'stadium_owner') {
+        const userStadiums = await Stadium.find({ ownerId: req.user.userId }).select('_id');
+        const stadiumIds = userStadiums.map(stadium => stadium._id);
+        
+        if (!stadiumIds.includes(req.query.stadiumId)) {
+          res.status(403).json({
+            success: false,
+            message: 'You can only view bookings for your own stadiums'
+          });
+          return;
+        }
+      }
+      query.stadiumId = req.query.stadiumId;
+    }
+
+    if (req.query.userId) {
+      query.userId = req.query.userId;
+    }
+
+    if (req.query.startDate || req.query.endDate) {
+      query.bookingDate = {};
+      if (req.query.startDate) {
+        query.bookingDate.$gte = new Date(req.query.startDate as string);
+      }
+      if (req.query.endDate) {
+        query.bookingDate.$lte = new Date(req.query.endDate as string);
+      }
+    }
+
+    const bookings = await Booking.find(query)
+      .populate('userId', 'name email phone')
+      .populate('stadiumId', 'name address')
+      .populate('fieldId', 'fieldName type')
+      .sort({ createdAt: -1, bookingDate: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const total = await Booking.countDocuments(query);
+
+    res.json({
+      success: true,
+      data: bookings,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    next(error);
   }
+}
 
   /**
    * Get booking details by ID
@@ -883,6 +925,59 @@ export class BookingController {
             isSpecialDate: false
           }
         }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Generate invoice for a booking
+   */
+  static async generateInvoice(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { bookingId } = req.params;
+
+      if (!mongoose.isValidObjectId(bookingId)) {
+        res.status(400).json({ success: false, message: 'Invalid booking ID' });
+        return;
+      }
+
+      // Find the booking
+      const booking = await Booking.findById(bookingId)
+        .populate('userId', 'firstName lastName email phone')
+        .populate('stadiumId', 'name address ownerId');
+
+      if (!booking) {
+        res.status(404).json({ success: false, message: 'Booking not found' });
+        return;
+      }
+
+      // Authorization: Only owner, stadium owner or admin can generate invoice
+      const isBookingOwner = booking.userId.toString() === req.user?.userId;
+      const isStadiumOwner = (booking.stadiumId as any).ownerId.toString() === req.user?.userId;
+      const isAdmin = req.user?.role === 'superadmin';
+
+      if (!isBookingOwner && !isStadiumOwner && !isAdmin) {
+        res.status(403).json({ success: false, message: 'Access denied' });
+        return;
+      }
+
+      // Get customer and stadium details
+      const customer = await User.findById(booking.userId);
+      const stadium = await Stadium.findById(booking.stadiumId);
+
+      if (!customer || !stadium) {
+        res.status(404).json({ success: false, message: 'Customer or stadium not found' });
+        return;
+      }
+
+      // Generate invoice data
+      const invoiceData = InvoiceService.generateInvoiceData(booking, stadium, customer);
+
+      res.json({
+        success: true,
+        data: invoiceData
       });
     } catch (error) {
       next(error);

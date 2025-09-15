@@ -2,29 +2,29 @@ import express, { Express, Request, Response } from 'express';
 // import mongoose from 'mongoose';
 import cors from 'cors';
 
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
 import compression from 'compression';
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
 // import mongoSanitize from 'express-mongo-sanitize';
-import morgan from 'morgan';
 import dotenv from 'dotenv';
-import { setupSwagger } from './config/swagger';
-import connectDB from './config/database';
-import SchedulerService from './utils/scheduler';
+import morgan from 'morgan';
 import path from 'path'; // ← Make sure to import path
+import connectDB from './config/database';
+import { setupSwagger } from './config/swagger';
+import SchedulerService from './utils/scheduler';
 
 // Import routes
 import authRoutes from './routes/auth';
 // import userRoutes from './routes/users';
-import stadiumRoutes from './routes/stadium';
 import bookingRoutes from './routes/bookings';
+import stadiumRoutes from './routes/stadium';
 
 import analyticsRoutes from './routes/analytics';
 // import notificationRoutes from './routes/notifications';
 
 // Import middleware
 import { authenticateToken, authorizeRoles } from './middleware/auth';
-import {errorHandler} from './middleware/errorHandler';
+import { errorHandler } from './middleware/errorHandler';
 
 dotenv.config();
 
@@ -38,14 +38,28 @@ SchedulerService.init();
 
 // Security middleware
 app.use(helmet());
+// CORS setup
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:8080',
+  'https://stadium-booking.netlify.app'
+];
+
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:8081',
-    'http://localhost:8080' // Vite dev server
-  ],
-  credentials: true,
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true
 }));
+
+// Handle preflight requests
+app.options('/*splat', cors({
+  origin: allowedOrigins,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true
+}));
+
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -82,13 +96,14 @@ app.use('/api/analytics', authenticateToken, authorizeRoles(['superadmin', 'stad
 
 
 
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+// Serve static files from project root's uploads folder
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads'), {
   setHeaders: (res, _path) => {
-    // Set proper CORS headers for images
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   }
 }));
+
 // Health check
 app.get('/api/health', (_req: Request, res: Response) => {
   res.json({
