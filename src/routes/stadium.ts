@@ -832,4 +832,519 @@ router.delete(
   StadiumController.deleteStadium
 );
 
+/**
+ * @swagger
+ * /api/stadiums/{stadiumId}/availability:
+ *   get:
+ *     summary: Get comprehensive availability information for all fields in a stadium on a specific date
+ *     tags: [Stadiums]
+ *     parameters:
+ *       - in: path
+ *         name: stadiumId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Stadium ID
+ *       - in: query
+ *         name: date
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Date to check availability (YYYY-MM-DD)
+ *     responses:
+ *       200:
+ *         description: Stadium availability information for all fields
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     stadium:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: string
+ *                         name:
+ *                           type: string
+ *                         address:
+ *                           type: object
+ *                     fields:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                           name:
+ *                             type: string
+ *                           type:
+ *                             type: string
+ *                           availableSlots:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                               properties:
+ *                                 startTime:
+ *                                   type: string
+ *                                 endTime:
+ *                                   type: string
+ *                                 rate:
+ *                                   type: number
+ *                                 currency:
+ *                                   type: string
+ *                                 status:
+ *                                   type: string
+ *                                   example: available
+ *                           unavailableSlots:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                               properties:
+ *                                 startTime:
+ *                                   type: string
+ *                                 endTime:
+ *                                   type: string
+ *                                 rate:
+ *                                   type: number
+ *                                 currency:
+ *                                   type: string
+ *                                 reason:
+ *                                   type: string
+ *                                 status:
+ *                                   type: string
+ *                                   enum: [schedule_unavailable, booked]
+ *                                 bookingStatus:
+ *                                   type: string
+ *                                   enum: [pending, confirmed]
+ *                           summary:
+ *                             type: object
+ *                             properties:
+ *                               totalSlots:
+ *                                 type: number
+ *                               availableCount:
+ *                                 type: number
+ *                               unavailableCount:
+ *                                 type: number
+ *                     availableReferees:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           name:
+ *                             type: string
+ *                           specializations:
+ *                             type: array
+ *                             items:
+ *                               type: string
+ *                           rate:
+ *                             type: number
+ *                           currency:
+ *                             type: string
+ *       400:
+ *         description: Invalid date format or past date
+ *       404:
+ *         description: Stadium not found
+ *       500:
+ *         description: Failed to get availability
+ */
+router.get(
+  '/:stadiumId/availability',
+  [
+    query('date')
+      .notEmpty()
+      .withMessage('Date is required')
+      .custom((value) => {
+        const moment = require('moment');
+        const date = moment(value, 'YYYY-MM-DD', true);
+        if (!date.isValid()) {
+          throw new Error('Invalid date format. Please use YYYY-MM-DD');
+        }
+        if (date.isBefore(moment().startOf('day'))) {
+          throw new Error('Cannot check availability for past dates');
+        }
+        return true;
+      })
+  ],
+  StadiumController.getStadiumAvailability
+);
+
+/**
+ * @swagger
+ * /api/stadiums/{stadiumId}/check-slot:
+ *   get:
+ *     summary: Check availability of a specific time slot across all fields in a stadium
+ *     tags: [Stadiums]
+ *     parameters:
+ *       - in: path
+ *         name: stadiumId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Stadium ID
+ *       - in: query
+ *         name: date
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Date to check (YYYY-MM-DD)
+ *       - in: query
+ *         name: startTime
+ *         required: true
+ *         schema:
+ *           type: string
+ *           pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'
+ *         description: Start time (HH:mm)
+ *       - in: query
+ *         name: endTime
+ *         required: true
+ *         schema:
+ *           type: string
+ *           pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'
+ *         description: End time (HH:mm)
+ *     responses:
+ *       200:
+ *         description: Slot availability check result for all fields
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     stadium:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: string
+ *                         name:
+ *                           type: string
+ *                     fields:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                           name:
+ *                             type: string
+ *                           type:
+ *                             type: string
+ *                           isAvailable:
+ *                             type: boolean
+ *                           reason:
+ *                             type: string
+ *                           pricing:
+ *                             type: object
+ *                             properties:
+ *                               rate:
+ *                                 type: number
+ *                               duration:
+ *                                 type: number
+ *                               total:
+ *                                 type: number
+ *                               currency:
+ *                                 type: string
+ *                     availableReferees:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                           name:
+ *                             type: string
+ *                           rate:
+ *                             type: number
+ *                           currency:
+ *                             type: string
+ *       400:
+ *         description: Invalid parameters
+ *       404:
+ *         description: Stadium not found
+ */
+router.get(
+  '/:stadiumId/check-slot',
+  [
+    query('date').notEmpty().isISO8601(),
+    query('startTime').matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),
+    query('endTime').matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
+  ],
+  StadiumController.checkStadiumSlot
+);
+
+/**
+ * @swagger
+ * /api/stadiums/{stadiumId}/fields/{fieldId}/availability:
+ *   get:
+ *     summary: Get comprehensive availability information for a specific field in a stadium on a specific date
+ *     tags: [Stadiums]
+ *     parameters:
+ *       - in: path
+ *         name: stadiumId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Stadium ID
+ *       - in: path
+ *         name: fieldId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Field ID
+ *       - in: query
+ *         name: date
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Date to check availability (YYYY-MM-DD)
+ *     responses:
+ *       200:
+ *         description: Field availability information
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     date:
+ *                       type: string
+ *                       format: date
+ *                     dayOfWeek:
+ *                       type: number
+ *                       description: Day of week (0=Sunday, 6=Saturday)
+ *                     fieldInfo:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: string
+ *                         name:
+ *                           type: string
+ *                         type:
+ *                           type: string
+ *                         surface:
+ *                           type: string
+ *                         status:
+ *                           type: string
+ *                         baseRate:
+ *                           type: number
+ *                         currency:
+ *                           type: string
+ *                     stadiumInfo:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: string
+ *                         name:
+ *                           type: string
+ *                     availableSlots:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           startTime:
+ *                             type: string
+ *                           endTime:
+ *                             type: string
+ *                           rate:
+ *                             type: number
+ *                           currency:
+ *                             type: string
+ *                           status:
+ *                             type: string
+ *                             example: available
+ *                     unavailableSlots:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           startTime:
+ *                             type: string
+ *                           endTime:
+ *                             type: string
+ *                           rate:
+ *                             type: number
+ *                           currency:
+ *                             type: string
+ *                           reason:
+ *                             type: string
+ *                           status:
+ *                             type: string
+ *                             enum: [schedule_unavailable, booked]
+ *                           bookingStatus:
+ *                             type: string
+ *                             enum: [pending, confirmed]
+ *                     summary:
+ *                       type: object
+ *                       properties:
+ *                         totalSlots:
+ *                           type: number
+ *                         availableCount:
+ *                           type: number
+ *                         unavailableCount:
+ *                           type: number
+ *                     availableReferees:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           name:
+ *                             type: string
+ *                           specializations:
+ *                             type: array
+ *                             items:
+ *                               type: string
+ *                           rate:
+ *                             type: number
+ *                           currency:
+ *                             type: string
+ *                     specialDateInfo:
+ *                       type: object
+ *                       properties:
+ *                         isSpecialDate:
+ *                           type: boolean
+ *                         reason:
+ *                           type: string
+ *       400:
+ *         description: Invalid date format or past date
+ *       404:
+ *         description: Stadium or field not found
+ *       500:
+ *         description: Failed to get availability
+ */
+router.get(
+  '/:stadiumId/fields/:fieldId/availability',
+  [
+    query('date')
+      .notEmpty()
+      .withMessage('Date is required')
+      .custom((value) => {
+        const moment = require('moment');
+        const date = moment(value, 'YYYY-MM-DD', true);
+        if (!date.isValid()) {
+          throw new Error('Invalid date format. Please use YYYY-MM-DD');
+        }
+        if (date.isBefore(moment().startOf('day'))) {
+          throw new Error('Cannot check availability for past dates');
+        }
+        return true;
+      })
+  ],
+  StadiumController.getFieldAvailability
+);
+
+/**
+ * @swagger
+ * /api/stadiums/{stadiumId}/fields/{fieldId}/check-slot:
+ *   get:
+ *     summary: Check availability of a specific time slot for a specific field in a stadium
+ *     tags: [Stadiums]
+ *     parameters:
+ *       - in: path
+ *         name: stadiumId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Stadium ID
+ *       - in: path
+ *         name: fieldId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Field ID
+ *       - in: query
+ *         name: date
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Date to check (YYYY-MM-DD)
+ *       - in: query
+ *         name: startTime
+ *         required: true
+ *         schema:
+ *           type: string
+ *           pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'
+ *         description: Start time (HH:mm)
+ *       - in: query
+ *         name: endTime
+ *         required: true
+ *         schema:
+ *           type: string
+ *           pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'
+ *         description: End time (HH:mm)
+ *     responses:
+ *       200:
+ *         description: Slot availability check result
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     isAvailable:
+ *                       type: boolean
+ *                     reason:
+ *                       type: string
+ *                     pricing:
+ *                       type: object
+ *                       properties:
+ *                         rate:
+ *                           type: number
+ *                         duration:
+ *                           type: number
+ *                         total:
+ *                           type: number
+ *                         currency:
+ *                           type: string
+ *                     availableReferees:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                           name:
+ *                             type: string
+ *                           rate:
+ *                             type: number
+ *                           currency:
+ *                             type: string
+ *       400:
+ *         description: Invalid parameters
+ *       404:
+ *         description: Stadium or field not found
+ */
+router.get(
+  '/:stadiumId/fields/:fieldId/check-slot',
+  [
+    query('date').notEmpty().isISO8601(),
+    query('startTime').matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),
+    query('endTime').matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
+  ],
+  StadiumController.checkFieldSlot
+);
+
 export default router;
