@@ -2,6 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import { validationResult } from 'express-validator';
 import jwt from 'jsonwebtoken';
 import User from '../models/User';
+import { LoyaltyController } from './loyalty.controller';
+import { Types } from 'mongoose';
+import { TranslationService } from '../services/translation.service';
 
 export class AuthController {
   /**
@@ -13,19 +16,19 @@ export class AuthController {
       if (!errors.isEmpty()) {
         res.status(400).json({
           success: false,
-          message: 'Validation errors',
+          message: TranslationService.t('validationError'),
           errors: errors.array()
         });
         return;
       }
 
-      const { email, password, firstName, lastName, phone, role } = req.body;
+      const { email, password, firstName, lastName, phone, role, referralCode } = req.body;
 
       const existingUser = await User.findOne({ email });
       if (existingUser) {
         res.status(400).json({
           success: false,
-          message: 'User already exists with this email'
+          message: TranslationService.t('userAlreadyExists')
         });
         return;
       }
@@ -41,6 +44,16 @@ export class AuthController {
 
       await user.save();
 
+      // Process referral if code is provided
+      if (referralCode) {
+        try {
+          await LoyaltyController.processReferral(referralCode, new Types.ObjectId((user._id as any).toString()));
+        } catch (error) {
+          console.error('Error processing referral:', error);
+          // Don't fail registration if referral processing fails
+        }
+      }
+
       const token = jwt.sign(
         { userId: user._id, role: user.role },
         process.env.JWT_SECRET || 'your-secret-key',
@@ -49,7 +62,7 @@ export class AuthController {
 
       res.status(201).json({
         success: true,
-        message: 'User registered successfully',
+        message: TranslationService.t('success'),
         token,
         user: user.toJSON()
       });
@@ -67,7 +80,7 @@ export class AuthController {
       if (!errors.isEmpty()) {
         res.status(400).json({
           success: false,
-          message: 'Validation errors',
+          message: TranslationService.t('validationError'),
           errors: errors.array()
         });
         return;
@@ -78,7 +91,7 @@ export class AuthController {
       if (!user) {
         res.status(401).json({
           success: false,
-          message: 'Invalid credentials'
+          message: TranslationService.t('invalidCredentials')
         });
         return;
       }
@@ -87,7 +100,7 @@ export class AuthController {
       if (!isMatch) {
         res.status(401).json({
           success: false,
-          message: 'Invalid credentials'
+          message: TranslationService.t('invalidCredentials')
         });
         return;
       }
@@ -95,7 +108,7 @@ export class AuthController {
       if (user.status !== 'active') {
         res.status(401).json({
           success: false,
-          message: 'Account is inactive or suspended'
+          message: TranslationService.t('accountInactive')
         });
         return;
       }
@@ -108,7 +121,7 @@ export class AuthController {
 
       res.json({
         success: true,
-        message: 'Login successful',
+        message: TranslationService.t('success'),
         token,
         user: user.toJSON()
       });
@@ -125,7 +138,7 @@ export class AuthController {
       if (!req.user || !req.user.userId) {
         res.status(401).json({
           success: false,
-          message: 'Unauthorized: User information missing'
+          message: TranslationService.t('userNotFound')
         });
         return;
       }
@@ -134,7 +147,7 @@ export class AuthController {
       if (!user) {
         res.status(404).json({
           success: false,
-          message: 'User not found'
+          message: TranslationService.t('userNotFound')
         });
         return;
       }
@@ -252,14 +265,14 @@ export class AuthController {
       if (!user) {
         res.status(404).json({
           success: false,
-          message: 'User not found'
+          message: TranslationService.t('userNotFound')
         });
         return;
       }
 
       res.json({
         success: true,
-        message: 'User status updated successfully',
+        message: TranslationService.t('success'),
         data: user
       });
     } catch (error) {
@@ -287,14 +300,14 @@ export class AuthController {
       if (!user) {
         res.status(404).json({
           success: false,
-          message: 'User not found'
+          message: TranslationService.t('userNotFound')
         });
         return;
       }
 
       res.json({
         success: true,
-        message: 'User deleted successfully'
+        message: TranslationService.t('success')
       });
     } catch (error) {
       next(error);
@@ -310,7 +323,7 @@ export class AuthController {
       if (!errors.isEmpty()) {
         res.status(400).json({
           success: false,
-          message: 'Validation errors',
+          message: TranslationService.t('validationError'),
           errors: errors.array()
         });
         return;
@@ -322,7 +335,7 @@ export class AuthController {
       if (existingUser) {
         res.status(400).json({
           success: false,
-          message: 'User already exists with this email'
+          message: TranslationService.t('userAlreadyExists')
         });
         return;
       }
@@ -341,7 +354,7 @@ export class AuthController {
 
       res.status(201).json({
         success: true,
-        message: 'User created successfully',
+        message: TranslationService.t('success'),
         user: user.toJSON()
       });
     } catch (error: any) {
@@ -358,7 +371,7 @@ export class AuthController {
       if (!errors.isEmpty()) {
         res.status(400).json({
           success: false,
-          message: 'Validation errors',
+          message: TranslationService.t('validationError'),
           errors: errors.array()
         });
         return;
@@ -368,7 +381,7 @@ export class AuthController {
       if (!user) {
         res.status(404).json({
           success: false,
-          message: 'User not found'
+          message: TranslationService.t('userNotFound')
         });
         return;
       }
@@ -391,7 +404,7 @@ export class AuthController {
       if (!errors.isEmpty()) {
         res.status(400).json({
           success: false,
-          message: 'Validation errors',
+          message: TranslationService.t('validationError'),
           errors: errors.array()
         });
         return;
@@ -409,14 +422,14 @@ export class AuthController {
       if (!user) {
         res.status(404).json({
           success: false,
-          message: 'User not found'
+          message: TranslationService.t('userNotFound')
         });
         return;
       }
 
       res.json({
         success: true,
-        message: 'User updated successfully',
+        message: TranslationService.t('success'),
         user: user.toJSON()
       });
     } catch (error: any) {
@@ -433,7 +446,7 @@ export class AuthController {
       if (!errors.isEmpty()) {
         res.status(400).json({
           success: false,
-          message: 'Validation errors',
+          message: TranslationService.t('validationError'),
           errors: errors.array()
         });
         return;
@@ -448,14 +461,14 @@ export class AuthController {
       if (!user) {
         res.status(404).json({
           success: false,
-          message: 'User not found'
+          message: TranslationService.t('userNotFound')
         });
         return;
       }
 
       res.json({
         success: true,
-        message: 'User verified successfully',
+        message: TranslationService.t('success'),
         data: user
       });
     } catch (error: any) {
@@ -482,7 +495,7 @@ export class AuthController {
         if (password.length < 6) {
           res.status(400).json({
             success: false,
-            message: 'Password must be at least 6 characters'
+            message: TranslationService.t('passwordTooShort')
           });
           return;
         }
@@ -492,7 +505,7 @@ export class AuthController {
       if (Object.keys(updateData).length === 0) {
         res.status(400).json({
           success: false,
-          message: 'No valid fields to update'
+          message: TranslationService.t('error')
         });
         return;
       }
@@ -506,14 +519,73 @@ export class AuthController {
       if (!user) {
         res.status(404).json({
           success: false,
-          message: 'User not found'
+          message: TranslationService.t('userNotFound')
         });
         return;
       }
 
       res.json({
         success: true,
-        message: 'User updated successfully',
+        message: TranslationService.t('success'),
+        user: user.toJSON()
+      });
+    } catch (error: any) {
+      next(error);
+    }
+  }
+
+  /**
+   * Update current user's profile
+   */
+  static async updateUserProfile(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      const updates = req.body;
+
+      // Only allow users to update their own profile
+      const user = await User.findById(userId);
+      if (!user) {
+        res.status(404).json({
+          success: false,
+          message: TranslationService.t('userNotFound')
+        });
+        return;
+      }
+
+      // Update profile fields
+      if (updates.firstName) user.firstName = updates.firstName.trim();
+      if (updates.lastName) user.lastName = updates.lastName.trim();
+      if (updates.phone) user.phone = updates.phone.trim();
+      
+      // Update profile object if provided
+      if (updates.profile) {
+        user.profile = user.profile || {};
+        
+        if (updates.profile.dateOfBirth !== undefined) 
+          user.profile.dateOfBirth = updates.profile.dateOfBirth;
+        if (updates.profile.gender !== undefined) 
+          user.profile.gender = updates.profile.gender;
+        if (updates.profile.bio !== undefined) 
+          user.profile.bio = updates.profile.bio;
+        if (updates.profile.preferredLanguage !== undefined) 
+          user.profile.preferredLanguage = updates.profile.preferredLanguage;
+        if (updates.profile.timezone !== undefined) 
+          user.profile.timezone = updates.profile.timezone;
+          
+        // Update notification preferences
+        if (updates.profile.notificationPreferences) {
+          user.profile.notificationPreferences = {
+            ...user.profile.notificationPreferences,
+            ...updates.profile.notificationPreferences
+          };
+        }
+      }
+
+      await user.save();
+
+      res.json({
+        success: true,
+        message: TranslationService.t('success'),
         user: user.toJSON()
       });
     } catch (error: any) {
@@ -527,7 +599,7 @@ export class AuthController {
       if (!errors.isEmpty()) {
         res.status(400).json({
           success: false,
-          message: 'Validation errors',
+          message: TranslationService.t('validationError'),
           errors: errors.array()
         });
         return;
@@ -538,7 +610,7 @@ export class AuthController {
       if (!user) {
         res.status(401).json({
           success: false,
-          message: 'Invalid credentials'
+          message: TranslationService.t('invalidCredentials')
         });
         return;
       }
@@ -547,7 +619,7 @@ export class AuthController {
       if (!isMatch) {
         res.status(401).json({
           success: false,
-          message: 'Invalid credentials'
+          message: TranslationService.t('invalidCredentials')
         });
         return;
       }
@@ -555,7 +627,7 @@ export class AuthController {
       if (user.status !== 'active') {
         res.status(403).json({
           success: false,
-          message: 'Account is inactive or suspended'
+          message: TranslationService.t('accountInactive')
         });
         return;
       }
@@ -568,7 +640,7 @@ export class AuthController {
 
       res.json({
         success: true,
-        message: 'Login successful',
+        message: TranslationService.t('success'),
         token,
         user: user.toJSON()
       });

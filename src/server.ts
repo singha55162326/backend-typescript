@@ -12,14 +12,21 @@ import path from 'path'; // ← Make sure to import path
 import connectDB from './config/database';
 import { setupSwagger } from './config/swagger';
 import SchedulerService from './utils/scheduler';
+import i18next, { middleware } from './config/i18n'; // Import i18n configuration
+import { setLanguageFromRequest } from './middleware/language.middleware'; // Import language middleware
+import { translationMiddleware } from './middleware/translation.middleware'; // Import translation middleware
 
 // Import routes
 import authRoutes from './routes/auth';
-// import userRoutes from './routes/users';
+import userRoutes from './routes/users';
 import bookingRoutes from './routes/bookings';
 import stadiumRoutes from './routes/stadium';
 
 import analyticsRoutes from './routes/analytics';
+import reviewRoutes from './routes/reviews';
+import loyaltyRoutes from './routes/loyalty';
+import translationRoutes from './routes/translations';
+
 // import notificationRoutes from './routes/notifications';
 
 // Import middleware
@@ -35,6 +42,15 @@ connectDB();
 
 // Initialize scheduler
 SchedulerService.init();
+
+// Initialize i18n middleware
+app.use(middleware.handle(i18next));
+
+// Set language from request (query param or header)
+app.use(setLanguageFromRequest);
+
+// Add translation function to request object
+app.use(translationMiddleware);
 
 // Security middleware
 app.use(helmet());
@@ -86,11 +102,13 @@ app.use(morgan('combined'));
 
 // Routes
 app.use('/api/auth', authRoutes);
-// app.use('/api/users', authenticateToken, userRoutes);
+app.use('/api/users', authenticateToken, userRoutes);
 app.use('/api/stadiums', stadiumRoutes);
 app.use('/api/bookings', authenticateToken, bookingRoutes);
-// app.use('/api/reviews', reviewRoutes);
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/loyalty', loyaltyRoutes);
 app.use('/api/analytics', authenticateToken, authorizeRoles(['superadmin', 'stadium_owner']), analyticsRoutes);
+app.use('/api/translations', translationRoutes);
 // app.use('/api/notifications', authenticateToken, notificationRoutes);
 // ✅ Serve static files from uploads directory
 

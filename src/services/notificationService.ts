@@ -63,18 +63,30 @@ class NotificationService {
   async sendBookingReminder(booking: any): Promise<void> {
     try {
       const user = await User.findById(booking.userId);
-      if (!user) return;
+      const stadium = await Stadium.findById(booking.stadiumId);
+      const field = booking.fieldId;
+      
+      if (!user || !stadium) return;
       
       const emailContent = `
         Dear ${user.firstName},
         
-        Reminder: You have a booking tomorrow!
+        This is a reminder for your upcoming booking tomorrow!
         
-        Booking Number: ${booking.bookingNumber}
-        Date: ${moment(booking.bookingDate).format('YYYY-MM-DD')}
-        Time: ${booking.startTime} - ${booking.endTime}
+        Booking Details:
+        - Booking Number: ${booking.bookingNumber}
+        - Stadium: ${stadium.name}
+        - Field: ${field?.name || 'Field'}
+        - Date: ${moment(booking.bookingDate).format('YYYY-MM-DD')}
+        - Time: ${booking.startTime} - ${booking.endTime}
+        - Duration: ${booking.durationHours} hours
+        - Total Amount: ${booking.pricing.totalAmount.toLocaleString()} ${booking.pricing.currency}
         
-        Please arrive 15 minutes early.
+        Please arrive 15 minutes early to prepare for your booking.
+        
+        If you need to make changes or cancel your booking, please do so at least 24 hours in advance.
+        
+        Thank you for choosing our service!
       `;
 
       await this.emailTransporter.sendMail({

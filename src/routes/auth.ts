@@ -385,7 +385,59 @@ body('phone')
     .withMessage('Password is required')
 ], AuthController.phoneLogin);
 
-
-
+/**
+ * @swagger
+ * /api/auth/me:
+ *   put:
+ *     summary: Update current user profile
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               firstName:
+ *                 type: string
+ *               lastName:
+ *                 type: string
+ *               phone:
+ *                 type: string
+ *               profile:
+ *                 type: object
+ *                 properties:
+ *                   dateOfBirth:
+ *                     type: string
+ *                     format: date
+ *                   gender:
+ *                     type: string
+ *                     enum: [male, female, other, prefer_not_to_say]
+ *                   bio:
+ *                     type: string
+ *                   preferredLanguage:
+ *                     type: string
+ *                   timezone:
+ *                     type: string
+ *                   notificationPreferences:
+ *                     type: object
+ *                     properties:
+ *                       email:
+ *                         type: boolean
+ *                       sms:
+ *                         type: boolean
+ *                       push:
+ *                         type: boolean
+ *                       bookingReminders:
+ *                         type: boolean
+ *                       promotions:
+ *                         type: boolean
+ *     responses:
+ *       200:
+ *         description: Profile updated successfully
+ */
+router.put('/me', authenticateToken, AuthController.updateUserProfile);
 
 export default router;

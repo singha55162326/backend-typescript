@@ -656,4 +656,289 @@ export class AnalyticsController {
       next(error);
     }
   }
+
+  /**
+   * Get detailed booking analytics with peak hours and popular fields
+   */
+  static async getDetailedBookingAnalytics(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        res.status(400).json({
+          success: false,
+          errors: errors.array(),
+        });
+        return;
+      }
+
+      // Date range
+      const endDate = moment().endOf('day').toDate();
+      const startDate = moment().subtract(30, 'days').startOf('day').toDate();
+
+      // Peak hours analysis with field information
+      const peakHoursByField = await Booking.aggregate([
+        {
+          $match: {
+            bookingDate: { $gte: startDate, $lte: endDate },
+            status: { $in: ['confirmed', 'completed'] }
+          }
+        },
+        {
+          $lookup: {
+            from: 'stadiums',
+            localField: 'stadiumId',
+            foreignField: '_id',
+            as: 'stadium'
+          }
+        },
+        {
+          $unwind: '$stadium'
+        },
+        {
+          $unwind: '$stadium.fields'
+        },
+        {
+          $match: {
+            $expr: { $eq: ['$stadium.fields._id', '$fieldId'] }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              hour: { $substr: ['$startTime', 0, 2] },
+              fieldName: '$stadium.fields.name',
+              fieldType: '$stadium.fields.fieldType'
+            },
+            count: { $sum: 1 },
+            totalRevenue: { $sum: '$pricing.totalAmount' }
+          }
+        },
+        {
+          $sort: { count: -1 }
+        },
+        {
+          $project: {
+            hour: '$_id.hour',
+            fieldName: '$_id.fieldName',
+            fieldType: '$_id.fieldType',
+            count: 1,
+            totalRevenue: 1,
+            _id: 0
+          }
+        }
+      ]);
+
+      // Popular fields analysis
+      const popularFields = await Booking.aggregate([
+        {
+          $match: {
+            bookingDate: { $gte: startDate, $lte: endDate },
+            status: { $in: ['confirmed', 'completed'] }
+          }
+        },
+        {
+          $lookup: {
+            from: 'stadiums',
+            localField: 'stadiumId',
+            foreignField: '_id',
+            as: 'stadium'
+          }
+        },
+        {
+          $unwind: '$stadium'
+        },
+        {
+          $unwind: '$stadium.fields'
+        },
+        {
+          $match: {
+            $expr: { $eq: ['$stadium.fields._id', '$fieldId'] }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              fieldName: '$stadium.fields.name',
+              fieldType: '$stadium.fields.fieldType',
+              stadiumName: '$stadium.name'
+            },
+            bookingCount: { $sum: 1 },
+            totalRevenue: { $sum: '$pricing.totalAmount' },
+            totalHours: { $sum: '$durationHours' }
+          }
+        },
+        {
+          $sort: { bookingCount: -1 }
+        },
+        {
+          $limit: 20
+        },
+        {
+          $project: {
+            fieldName: '$_id.fieldName',
+            fieldType: '$_id.fieldType',
+            stadiumName: '$_id.stadiumName',
+            bookingCount: 1,
+            totalRevenue: 1,
+            totalHours: 1,
+            _id: 0
+          }
+        }
+      ]);
+
+      // Revenue reports by time period
+      const revenueReports = await Booking.aggregate([
+        {
+          $match: {
+            bookingDate: { $gte: startDate, $lte: endDate },
+            status: { $in: ['confirmed', 'completed'] },
+            paymentStatus: 'paid'
+          }
+        },
+        {
+          $group: {
+            _id: {
+              year: { $year: '$bookingDate' },
+              month: { $month: '$bookingDate' },
+              day: { $dayOfMonth: '$bookingDate' }
+            },
+            dailyRevenue: { $sum: '$pricing.totalAmount' },
+            bookingCount: { $sum: 1 }
+          }
+        },
+        {
+          $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 }
+        },
+        {
+          $project: {
+            date: {
+              $dateFromParts: {
+                year: '$_id.year',
+                month: '$_id.month',
+                day: '$_id.day'
+              }
+            },
+            dailyRevenue: 1,
+            bookingCount: 1,
+            _id: 0
+          }
+        }
+      ]);
+
+      res.json({
+        success: true,
+        data: {
+          peakHoursByField,
+          popularFields,
+          revenueReports,
+          dateRange: {
+            startDate,
+            endDate
+          }
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Export analytics data as CSV
+   */
+  static async exportAnalyticsCSV(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { type, startDate, endDate } = req.query;
+      
+      // Date range
+      const start = startDate ? new Date(startDate as string) : moment().subtract(30, 'days').startOf('day').toDate();
+      const end = endDate ? new Date(endDate as string) : moment().endOf('day').toDate();
+
+      let csvData = '';
+      let filename = 'analytics-export';
+
+      switch (type) {
+        case 'bookings':
+          filename = 'bookings-report';
+          const bookings = await Booking.find({
+            bookingDate: { $gte: start, $lte: end }
+          }).populate('userId', 'firstName lastName email')
+            .populate('stadiumId', 'name')
+            .populate('fieldId', 'name');
+          
+          csvData = 'Booking Number,Date,Time,User,Stadium,Field,Status,Payment Status,Amount\n';
+          bookings.forEach(booking => {
+            const user = booking.userId as any;
+            const stadium = booking.stadiumId as any;
+            const field = booking.fieldId as any;
+            
+            csvData += `${booking.bookingNumber},${moment(booking.bookingDate).format('YYYY-MM-DD')},${booking.startTime}-${booking.endTime},${user?.firstName || ''} ${user?.lastName || ''},${stadium?.name || ''},${field?.name || ''},${booking.status},${booking.paymentStatus},${booking.pricing.totalAmount}\n`;
+          });
+          break;
+          
+        case 'revenue':
+          filename = 'revenue-report';
+          const revenueData = await Booking.aggregate([
+            {
+              $match: {
+                bookingDate: { $gte: start, $lte: end },
+                status: { $in: ['confirmed', 'completed'] },
+                paymentStatus: 'paid'
+              }
+            },
+            {
+              $group: {
+                _id: {
+                  year: { $year: '$bookingDate' },
+                  month: { $month: '$bookingDate' }
+                },
+                totalRevenue: { $sum: '$pricing.totalAmount' },
+                bookingCount: { $sum: 1 }
+              }
+            },
+            {
+              $sort: { '_id.year': 1, '_id.month': 1 }
+            }
+          ]);
+          
+          csvData = 'Period,Total Revenue,Booking Count\n';
+          revenueData.forEach(item => {
+            const period = `${item._id.year}-${item._id.month.toString().padStart(2, '0')}`;
+            csvData += `${period},${item.totalRevenue},${item.bookingCount}\n`;
+          });
+          break;
+          
+        default:
+          res.status(400).json({
+            success: false,
+            message: 'Invalid export type'
+          });
+          return;
+      }
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename=${filename}.csv`);
+      res.send(csvData);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Export analytics data as PDF
+   */
+  static async exportAnalyticsPDF(_req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      // For now, we'll return a simple response indicating PDF export is available
+      // In a real implementation, you would use a library like pdfkit or html-pdf
+      res.json({
+        success: true,
+        message: 'PDF export functionality is available. In a full implementation, this would generate a PDF report.',
+        data: {
+          url: '/api/analytics/export/pdf' // Placeholder URL
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }

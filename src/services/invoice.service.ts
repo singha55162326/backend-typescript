@@ -36,6 +36,11 @@ export interface IInvoiceData {
     ownerId: string;
     ownerName?: string; // Make ownerName optional
   };
+  field?: { // Add optional field information
+    fieldId: string;
+    name: string;
+    fieldType: string;
+  };
   items: IInvoiceItem[];
   subtotal: number;
   taxes: number;
@@ -59,10 +64,59 @@ export class InvoiceService {
     const dueDate = new Date(invoiceDate);
     dueDate.setDate(dueDate.getDate() + 7);
 
+    // Find the field information from the stadium's fields array
+    let fieldInfo = undefined;
+    let fieldName = '';
+    
+    try {
+      if (stadium.fields && Array.isArray(stadium.fields) && booking.fieldId) {
+        // Convert booking.fieldId to string for comparison
+        const bookingFieldIdStr = booking.fieldId.toString();
+        
+        // Find the field in the stadium's fields array
+        const field = stadium.fields.find((f: any) => {
+          // Check multiple possible ways the _id might be stored
+          if (f._id) {
+            // If _id is an ObjectId, convert to string
+            if (typeof f._id === 'object' && f._id.toString) {
+              return f._id.toString() === bookingFieldIdStr;
+            }
+            // If _id is already a string
+            if (typeof f._id === 'string') {
+              return f._id === bookingFieldIdStr;
+            }
+          }
+          return false;
+        });
+        
+        if (field) {
+          fieldInfo = {
+            fieldId: bookingFieldIdStr,
+            name: field.name || 'Unknown Field',
+            fieldType: field.fieldType || 'Unknown Type'
+          };
+          fieldName = ` - ${field.name}`;
+        } else {
+          // Try to get field name from populated fieldId in booking
+          if (booking.fieldId && typeof booking.fieldId === 'object' && 'name' in booking.fieldId) {
+            const populatedField = booking.fieldId as any;
+            fieldInfo = {
+              fieldId: bookingFieldIdStr,
+              name: populatedField.name || 'Unknown Field',
+              fieldType: populatedField.fieldType || 'Unknown Type'
+            };
+            fieldName = ` - ${populatedField.name}`;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error extracting field information:', error);
+    }
+
     // Build invoice items
     const items: IInvoiceItem[] = [
       {
-        description: `Field rental: ${stadium.name}`,
+        description: `Field rental: ${stadium.name}${fieldName}`,
         quantity: booking.durationHours,
         unitPrice: booking.pricing.baseRate,
         total: booking.pricing.baseRate * booking.durationHours
@@ -126,6 +180,7 @@ export class InvoiceService {
         ownerId: stadium.ownerId.toString(), // Keep the ID for reference
         ownerName: ownerName // Add owner name if available
       },
+      field: fieldInfo, // Add field information
       items,
       subtotal,
       taxes,

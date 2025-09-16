@@ -39,6 +39,55 @@ router.get('/bookings', authenticateToken, authorizeRoles(['superadmin', 'stadiu
 
 /**
  * @swagger
+ * /api/analytics/detailed:
+ *   get:
+ *     summary: Get detailed booking analytics
+ *     tags: [Analytics]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.get('/detailed', authenticateToken, authorizeRoles(['superadmin', 'stadium_owner']), AnalyticsController.getDetailedBookingAnalytics);
+
+/**
+ * @swagger
+ * /api/analytics/export:
+ *   get:
+ *     summary: Export analytics data
+ *     tags: [Analytics]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *           enum: [bookings, revenue]
+ *         required: true
+ *         description: Type of data to export
+ *       - in: query
+ *         name: format
+ *         schema:
+ *           type: string
+ *           enum: [csv, pdf]
+ *         required: true
+ *         description: Export format
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Start date for export period
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: End date for export period
+ */
+router.get('/export', authenticateToken, authorizeRoles(['superadmin', 'stadium_owner']), AnalyticsController.exportAnalyticsCSV);
+
+/**
+ * @swagger
  * /api/analytics/stadiums/{stadiumId}:
  *   get:
  *     summary: Get stadium analytics (owner/admin only)

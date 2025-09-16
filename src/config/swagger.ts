@@ -192,6 +192,91 @@ const options: swaggerJsdoc.Options = {
         },
 
         // ======================
+        // 🔹 CALENDAR
+        // ======================
+        CalendarEvent: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            title: { type: 'string' },
+            start: { type: 'string', format: 'date-time' },
+            end: { type: 'string', format: 'date-time' },
+            status: { 
+              type: 'string', 
+              enum: ['pending', 'confirmed', 'cancelled', 'completed', 'no_show'] 
+            },
+            bookingId: { type: 'string' },
+            stadiumId: { type: 'string' },
+            fieldId: { type: 'string' },
+            userId: { type: 'string' },
+            backgroundColor: { type: 'string' },
+            borderColor: { type: 'string' },
+            textColor: { type: 'string' },
+            className: { type: 'string' },
+            extendedProps: {
+              type: 'object',
+              properties: {
+                bookingType: { 
+                  type: 'string',
+                  enum: ['regular', 'tournament', 'training', 'event']
+                },
+                totalPrice: { type: 'number' },
+                currency: { type: 'string' },
+                customerName: { type: 'string' },
+                fieldName: { type: 'string' },
+                stadiumName: { type: 'string' }
+              }
+            }
+          },
+          required: ['id', 'title', 'start', 'end', 'status']
+        },
+        
+        VisualCalendarData: {
+          type: 'object',
+          properties: {
+            events: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/CalendarEvent' }
+            },
+            dateRange: {
+              type: 'object',
+              properties: {
+                start: { type: 'string', format: 'date-time' },
+                end: { type: 'string', format: 'date-time' }
+              }
+            },
+            summary: {
+              type: 'object',
+              properties: {
+                totalEvents: { type: 'number' },
+                eventsByStatus: { 
+                  type: 'object',
+                  additionalProperties: { type: 'number' }
+                },
+                eventsByType: { 
+                  type: 'object',
+                  additionalProperties: { type: 'number' }
+                },
+                revenue: { type: 'number' },
+                currency: { type: 'string' }
+              }
+            },
+            monthlyBreakdown: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  month: { type: 'string' },
+                  year: { type: 'number' },
+                  events: { type: 'number' },
+                  revenue: { type: 'number' }
+                }
+              }
+            }
+          }
+        },
+
+        // ======================
         // 🔹 PAYMENT
         // ======================
         Payment: {

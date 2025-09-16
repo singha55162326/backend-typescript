@@ -122,9 +122,26 @@ interface IStadiumFacilities {
 interface IStadiumStats {
   totalFields?: number;
   averageRating?: number;
+  totalReviews?: number;
   totalBookings?: number;
   totalRevenue?: number;
   lastUpdated?: Date;
+}
+
+// Add this interface for widget configuration
+interface IWidgetConfig {
+  enabled: boolean;
+  theme: {
+    primaryColor: string;
+    backgroundColor: string;
+    textColor: string;
+  };
+  features: {
+    showPricing: boolean;
+    showReviews: boolean;
+    requirePhone: boolean;
+  };
+  customMessage?: string;
 }
 
 export interface IStadium extends Document {
@@ -139,6 +156,7 @@ export interface IStadium extends Document {
   staff?: IStaff[];
   fields?: IField[];
   stats?: IStadiumStats;
+  widgetConfig?: IWidgetConfig; // Add this line
 }
 
 const pricingTierSchema = new Schema<IPricingTier>({
@@ -302,9 +320,9 @@ const fieldSchema = new Schema<IField>({
   }]
 });
 
-const stadiumSchema = new Schema<IStadium>({
+const stadiumSchema: Schema<IStadium> = new mongoose.Schema({
   ownerId: {
-    type: Schema.Types.ObjectId,
+    type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
@@ -313,7 +331,10 @@ const stadiumSchema = new Schema<IStadium>({
     required: true,
     trim: true
   },
-  description: String,
+  description: {
+    type: String,
+    maxlength: 2000
+  },
   address: {
     street: String,
     city: {
@@ -321,35 +342,23 @@ const stadiumSchema = new Schema<IStadium>({
       required: true
     },
     state: String,
-    country: {
-      type: String,
-      default: 'Laos'
-    },
+    country: String,
     postalCode: String,
     coordinates: {
       type: {
         type: String,
-        enum: ['Point'],
-        default: 'Point',
-        required: true
+        enum: ['Point']
       },
       coordinates: {
         type: [Number],
-        required: true,
-        validate: {
-          validator: function(coords: number[]) {
-            return coords.length === 2 && 
-                   coords[0] >= 100 && coords[0] <= 108 &&
-                   coords[1] >= 13 && coords[1] <= 23;
-          },
-          message: 'Coordinates must be valid Laos coordinates [longitude between 100-108, latitude between 13-23]'
-        }
+        index: '2dsphere'
       }
     }
   },
   capacity: {
     type: Number,
-    required: true
+    required: true,
+    min: 1
   },
   facilities: {
     parking: Boolean,
@@ -369,11 +378,47 @@ const stadiumSchema = new Schema<IStadium>({
   staff: [stadiumStaffSchema],
   fields: [fieldSchema],
   stats: {
-    totalFields: { type: Number, default: 0 },
-    averageRating: { type: Number, default: 0 },
-    totalBookings: { type: Number, default: 0 },
-    totalRevenue: { type: Number, default: 0 },
-    lastUpdated: { type: Date, default: Date.now }
+    totalFields: Number,
+    averageRating: Number,
+    totalReviews: Number,
+    totalBookings: Number,
+    totalRevenue: Number,
+    lastUpdated: Date
+  },
+  widgetConfig: {
+    enabled: {
+      type: Boolean,
+      default: false
+    },
+    theme: {
+      primaryColor: {
+        type: String,
+        default: '#2563eb'
+      },
+      backgroundColor: {
+        type: String,
+        default: '#ffffff'
+      },
+      textColor: {
+        type: String,
+        default: '#000000'
+      }
+    },
+    features: {
+      showPricing: {
+        type: Boolean,
+        default: true
+      },
+      showReviews: {
+        type: Boolean,
+        default: true
+      },
+      requirePhone: {
+        type: Boolean,
+        default: false
+      }
+    },
+    customMessage: String
   }
 }, {
   timestamps: true

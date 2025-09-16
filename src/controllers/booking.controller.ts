@@ -208,11 +208,8 @@ export class BookingController {
   }
 
   /**
-   * Get all bookings (Admin only)
+   * Get all bookings (Admin and Stadium Owner access)
    */
-  /**
- * Get all bookings (Admin and Stadium Owner access)
- */
 static async getAllBookings(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const page = parseInt(req.query.page as string) || 1;
@@ -293,7 +290,7 @@ static async getAllBookings(req: Request, res: Response, next: NextFunction): Pr
     const bookings = await Booking.find(query)
       .populate('userId', 'name email phone')
       .populate('stadiumId', 'name address')
-      .populate('fieldId', 'fieldName type')
+      .populate('fieldId', 'name fieldType')
       .sort({ createdAt: -1, bookingDate: -1 })
       .skip(skip)
       .limit(limit);
@@ -330,7 +327,7 @@ static async getAllBookings(req: Request, res: Response, next: NextFunction): Pr
       const booking = await Booking.findById(bookingId)
         .populate('userId', 'name email phone')
         .populate('stadiumId', 'name address phone manager')
-        .populate('fieldId', 'fieldName type size')
+        .populate('fieldId', 'name fieldType')
         .populate('cancellation.cancelledBy', 'name role')
         .populate('history.changedBy', 'name role')
         .populate('assignedStaff.staffId', 'name phone role');
@@ -497,7 +494,7 @@ static async getAllBookings(req: Request, res: Response, next: NextFunction): Pr
       const updatedBooking = await Booking.findById(booking._id)
         .populate('userId', 'name email phone')
         .populate('stadiumId', 'name address phone manager')
-        .populate('fieldId', 'fieldName type size')
+        .populate('fieldId', 'name fieldType')
         .populate('cancellation.cancelledBy', 'name role')
         .populate('history.changedBy', 'name role')
         .populate('assignedStaff.staffId', 'name phone role');
@@ -950,15 +947,21 @@ static async getAllBookings(req: Request, res: Response, next: NextFunction): Pr
         return;
       }
 
-      // Find the booking
+      // Find the booking and populate all necessary information
       const booking = await Booking.findById(bookingId)
         .populate('userId', 'firstName lastName email phone')
         .populate({
           path: 'stadiumId',
-          populate: {
-            path: 'ownerId',
-            select: 'firstName lastName'
-          }
+          populate: [
+            {
+              path: 'ownerId',
+              select: 'firstName lastName'
+            },
+            {
+              path: 'fields',
+              select: 'name fieldType'
+            }
+          ]
         });
 
       if (!booking) {
@@ -976,9 +979,12 @@ static async getAllBookings(req: Request, res: Response, next: NextFunction): Pr
         return;
       }
 
-      // Get customer and stadium details
+      // Get customer and stadium details (with fields)
       const customer = await User.findById(booking.userId);
-      const stadium = await Stadium.findById(booking.stadiumId).populate('ownerId', 'firstName lastName');
+      const stadium = await Stadium.findById(booking.stadiumId).populate([
+        { path: 'ownerId', select: 'firstName lastName' },
+        { path: 'fields', select: 'name fieldType' }
+      ]);
 
       if (!customer || !stadium) {
         res.status(404).json({ success: false, message: 'Customer or stadium not found' });
