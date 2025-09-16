@@ -26,6 +26,7 @@ import analyticsRoutes from './routes/analytics';
 import reviewRoutes from './routes/reviews';
 import loyaltyRoutes from './routes/loyalty';
 import translationRoutes from './routes/translations';
+import calendarRoutes from './routes/calendar'
 
 // import notificationRoutes from './routes/notifications';
 
@@ -109,6 +110,7 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/loyalty', loyaltyRoutes);
 app.use('/api/analytics', authenticateToken, authorizeRoles(['superadmin', 'stadium_owner']), analyticsRoutes);
 app.use('/api/translations', translationRoutes);
+app.use('/api/calendar', calendarRoutes);
 // app.use('/api/notifications', authenticateToken, notificationRoutes);
 // ✅ Serve static files from uploads directory
 
