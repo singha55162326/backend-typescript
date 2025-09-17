@@ -5,6 +5,7 @@ import User from '../models/User';
 import { LoyaltyController } from './loyalty.controller';
 import { Types } from 'mongoose';
 import { TranslationService } from '../services/translation.service';
+import { LaoPhoneUtil } from '../utils/phoneUtils';
 
 export class AuthController {
   /**
@@ -594,59 +595,69 @@ export class AuthController {
   }
 
   static async phoneLogin(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        res.status(400).json({
-          success: false,
-          message: TranslationService.t('validationError'),
-          errors: errors.array()
-        });
-        return;
-      }
-
-      const { phone, password } = req.body;
-      const user = await User.findOne({ phone });
-      if (!user) {
-        res.status(401).json({
-          success: false,
-          message: TranslationService.t('invalidCredentials')
-        });
-        return;
-      }
-
-      const isMatch = await user.comparePassword(password);
-      if (!isMatch) {
-        res.status(401).json({
-          success: false,
-          message: TranslationService.t('invalidCredentials')
-        });
-        return;
-      }
-
-      if (user.status !== 'active') {
-        res.status(403).json({
-          success: false,
-          message: TranslationService.t('accountInactive')
-        });
-        return;
-      }
-
-      const token = jwt.sign(
-        { userId: user._id, role: user.role },
-        process.env.JWT_SECRET || 'your-secret-key',
-        { expiresIn: '7d' }
-      );
-
-      res.json({
-        success: true,
-        message: TranslationService.t('success'),
-        token,
-        user: user.toJSON()
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      res.status(400).json({
+        success: false,
+        message: TranslationService.t('validationError'),
+        errors: errors.array()
       });
-    } catch (error: any) {
-      next(error);
+      return;
     }
+
+    const { phone, password } = req.body;
+
+    // 👇 Normalize & validate Lao phone number
+    const normalizedPhone = LaoPhoneUtil.normalize(phone);
+    if (!normalizedPhone) {
+      res.status(400).json({
+        success: false,
+        message: TranslationService.t('invalidLaoPhoneNumber')
+      });
+      return;
+    }
+
+    const user = await User.findOne({ phone: normalizedPhone });
+    if (!user) {
+      res.status(401).json({
+        success: false,
+        message: TranslationService.t('invalidCredentials')
+      });
+      return;
+    }
+
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      res.status(401).json({
+        success: false,
+        message: TranslationService.t('invalidCredentials')
+      });
+      return;
+    }
+
+    if (user.status !== 'active') {
+      res.status(403).json({
+        success: false,
+        message: TranslationService.t('accountInactive')
+      });
+      return;
+    }
+
+    const token = jwt.sign(
+      { userId: user._id, role: user.role },
+      process.env.JWT_SECRET || 'your-secret-key',
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      success: true,
+      message: TranslationService.t('success'),
+      token,
+      user: user.toJSON()
+    });
+  } catch (error: any) {
+    next(error);
   }
-  
+}
 }

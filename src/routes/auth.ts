@@ -374,12 +374,43 @@ router.put(
 );
 
 
+/**
+ * @swagger
+ * /api/auth/customer/login:
+ *   post:
+ *     summary: Login user with LAO phone number (must be Lao format)
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - phone
+ *               - password
+ *             properties:
+ *               phone:
+ *                 type: string
+ *                 example: "02012345678"
+ *                 description: Must be Lao phone number (020..., +85620..., or 20...)
+ *               password:
+ *                 type: string
+ *                 example: "password123"
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *       400:
+ *         description: Invalid Lao phone number
+ *       401:
+ *         description: Invalid credentials or inactive account
+ */
+
 // Login customer with phone number
 router.post('/customer/login', [
 body('phone')
   .isLength({ min: 8, max: 15 })
-  .isNumeric()
-  .withMessage('Phone must be numeric and between 8–15 digits'),
+  .withMessage('Phone must be 8–15 characters (digits, spaces, or + allowed)'),
   body('password')
     .isLength({ min: 1 })
     .withMessage('Password is required')
