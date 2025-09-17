@@ -55,6 +55,9 @@ app.use(translationMiddleware);
 
 // Security middleware
 app.use(helmet());
+
+// 👇 FIX: Trust proxy to avoid X-Forwarded-For validation error
+app.set('trust proxy', 1);
 // CORS setup
 const allowedOrigins = [
   'http://localhost:3000',
