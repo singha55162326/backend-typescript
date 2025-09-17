@@ -374,22 +374,17 @@ router.put(
 );
 
 
-// Helper to sanitize phone: remove all non-digit chars
-const sanitizePhone = (value: string) => {
-  return value.replace(/\D/g, ''); // Keep only digits
-};
-
+// Login customer with phone number
 router.post('/customer/login', [
-  body('phone')
-    .customSanitizer(sanitizePhone)
-    .isLength({ min: 8, max: 15 })
-    .withMessage('Phone number must be 8 to 15 digits after removing special characters')
-    .isNumeric()
-    .withMessage('Phone number must contain only digits after sanitization'),
+body('phone')
+  .isLength({ min: 8, max: 15 })
+  .isNumeric()
+  .withMessage('Phone must be numeric and between 8–15 digits'),
   body('password')
     .isLength({ min: 1 })
     .withMessage('Password is required')
 ], AuthController.phoneLogin);
+
 /**
  * @swagger
  * /api/auth/me:
