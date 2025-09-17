@@ -408,9 +408,7 @@ router.put(
 
 // Login customer with phone number
 router.post('/customer/login', [
-body('phone')
-  .isLength({ min: 8, max: 15 })
-  .withMessage('Phone must be 8–15 characters (digits, spaces, or + allowed)'),
+body('phone').notEmpty().withMessage('Phone is required'),
   body('password')
     .isLength({ min: 1 })
     .withMessage('Password is required')

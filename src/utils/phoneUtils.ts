@@ -2,35 +2,46 @@
 
 export class LaoPhoneUtil {
   /**
-   * แปลงเบอร์ลาวทุกรูปแบบให้เป็น +85620xxxxxxx
+   * Normalize Lao phone number to +85620xxxxxxx
+   * Accepts:
+   *   "02012345678" → 11 digits
+   *   "2012345678"  → 10 digits
+   *   "8562012345678" → 13 digits (assumes missing +)
+   *   "+8562012345678" → will be cleaned to 8562012345678 (13) then processed
    */
   static normalize(phone: string): string | null {
     if (!phone) return null;
 
-    // ลบช่องว่าง, -, (), . ฯลฯ
-    const cleaned = phone.replace(/\D/g, '');
+    // Remove all non-digit characters
+    let cleaned = phone.replace(/\D/g, '');
 
+    // Case 1: Starts with 020 and 11 digits total
     if (cleaned.startsWith('020') && cleaned.length === 11) {
-      return `+856${cleaned.slice(1)}`; // 020 → +85620
-    } else if (cleaned.startsWith('85620') && cleaned.length === 12) {
-      return `+${cleaned}`;
-    } else if (cleaned.startsWith('20') && cleaned.length === 10) {
-      return `+856${cleaned}`;
+      return '+856' + cleaned.substring(1); // Remove leading 0 → 2012345678
     }
 
-    return null; // ไม่ใช่เบอร์ลาวที่ถูกต้อง
+    // Case 2: Starts with 20 and 10 digits total
+    if (cleaned.startsWith('20') && cleaned.length === 10) {
+      return '+856' + cleaned;
+    }
+
+    // Case 3: Starts with 85620 and 13 digits total (e.g., user typed +85620... but + was stripped)
+    if (cleaned.startsWith('85620') && cleaned.length === 13) {
+      return '+' + cleaned;
+    }
+
+    // Case 4: Starts with 85620 and 12 digits (e.g., 856201234567)
+    if (cleaned.startsWith('85620') && cleaned.length === 12) {
+      return '+' + cleaned;
+    }
+
+    return null;
   }
 
-  /**
-   * ตรวจสอบว่าเป็นเบอร์ลาวหรือไม่
-   */
   static isValid(phone: string): boolean {
     return this.normalize(phone) !== null;
   }
 
-  /**
-   * เปรียบเทียบสองเบอร์ว่าตรงกันหรือไม่ (แม้รูปแบบต่างกัน)
-   */
   static isEqual(phone1: string, phone2: string): boolean {
     const n1 = this.normalize(phone1);
     const n2 = this.normalize(phone2);
