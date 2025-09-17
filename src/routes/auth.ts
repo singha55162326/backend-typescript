@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { body, param, query } from 'express-validator';
 import { AuthController } from '../controllers/auth.controller';
 import { authenticateToken, authorizeRoles } from '../middleware/auth';
-import { requireAdmin } from '../middleware/rbac';
+import { requireAdmin, requireStadiumOwnerOrAdmin } from '../middleware/rbac';
 
 const router = Router();
 
@@ -369,7 +369,7 @@ router.patch(
 router.put(
   '/users/:id',
   authenticateToken,
-  requireAdmin,
+  requireStadiumOwnerOrAdmin,
   AuthController.replaceUser
 );
 
