@@ -379,10 +379,7 @@ router.put(
 router.post('/customer/login', [
   body('phone')
     .notEmpty().withMessage('Phone is required')
-    .isMobilePhone('any', { strictMode: false }).withMessage('Please enter a valid phone number (e.g. +1234567890)'),
-  body('password')
-    .notEmpty().withMessage('Password is required')
-    .isString()
+    .matches(/^\+?[1-9]\d{7,14}$/).withMessage('Please enter a valid phone number (e.g. +85620XXXXXX)')
 ], AuthController.phoneLogin);
 /**
  * @swagger
