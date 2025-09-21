@@ -1112,51 +1112,51 @@ export class StadiumController {
       }
 
       // Check if slot is within field's operating hours
-      const dayOfWeek = moment(date as string).day();
-      const daySchedule = field.availabilitySchedule?.find((schedule: any) => 
-        schedule.dayOfWeek === dayOfWeek
-      );
+      // const dayOfWeek = moment(date as string).day();
+      // const daySchedule = field.availabilitySchedule?.find((schedule: any) => 
+      //   schedule.dayOfWeek === dayOfWeek
+      // );
 
-      if (!daySchedule) {
-        res.json({
-          success: true,
-          data: {
-            isAvailable: false,
-            reason: 'Field is not open on this day',
-            pricing: {
-              rate,
-              duration,
-              total,
-              currency: field.pricing.currency || 'LAK'
-            }
-          }
-        });
-        return;
-      }
+      // if (!daySchedule) {
+      //   res.json({
+      //     success: true,
+      //     data: {
+      //       isAvailable: false,
+      //       reason: 'Field is not open on this day',
+      //       pricing: {
+      //         rate,
+      //         duration,
+      //         total,
+      //         currency: field.pricing.currency || 'LAK'
+      //       }
+      //     }
+      //   });
+      //   return;
+      // }
 
       // Check if the requested time falls within any available slot
-      const isWithinOperatingHours = daySchedule.timeSlots.some((slot: any) => 
-        slot.isAvailable &&
-        slot.startTime <= (startTime as string) &&
-        slot.endTime >= (endTime as string)
-      );
+      // const isWithinOperatingHours = daySchedule.timeSlots.some((slot: any) => 
+      //   slot.isAvailable &&
+      //   slot.startTime <= (startTime as string) &&
+      //   slot.endTime >= (endTime as string)
+      // );
 
-      if (!isWithinOperatingHours) {
-        res.json({
-          success: true,
-          data: {
-            isAvailable: false,
-            reason: 'Requested time is outside field operating hours',
-            pricing: {
-              rate,
-              duration,
-              total,
-              currency: field.pricing.currency || 'LAK'
-            }
-          }
-        });
-        return;
-      }
+      // if (!isWithinOperatingHours) {
+      //   res.json({
+      //     success: true,
+      //     data: {
+      //       isAvailable: false,
+      //       reason: 'Requested time is outside field operating hours',
+      //       pricing: {
+      //         rate,
+      //         duration,
+      //         total,
+      //         currency: field.pricing.currency || 'LAK'
+      //       }
+      //     }
+      //   });
+      //   return;
+      // }
 
       // Get available referees for this time slot
       const availableReferees = stadium.staff ? await AvailabilityService.getAvailableReferees(
