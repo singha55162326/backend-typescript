@@ -449,7 +449,14 @@ router.put(
  *                   type: string
  *                   example: "Invalid credentials"
  */
-router.post('/customer/login', AuthController.phoneLogin);
+
+// Login customer with phone number
+
+router.post('/customer/login', [
+  body('phone')
+    .notEmpty().withMessage('Phone is required')
+    .matches(/^\+?[1-9]\d{7,14}$/).withMessage('Please enter a valid phone number (e.g. +85620XXXXXX)')
+], AuthController.phoneLogin);
 /**
  * @swagger
  * /api/auth/me:
