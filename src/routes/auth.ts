@@ -374,16 +374,82 @@ router.put(
 );
 
 
-// Login customer with phone number
-
-router.post('/customer/login', [
-  body('phone')
-    .notEmpty().withMessage('Phone is required')
-    .isMobilePhone('any', { strictMode: false }).withMessage('Please enter a valid phone number (e.g. +1234567890)'),
-  body('password')
-    .notEmpty().withMessage('Password is required')
-    .isString()
-], AuthController.phoneLogin);
+/**
+ * @swagger
+ * /api/auth/customer/login:
+ *   post:
+ *     summary: Login customer using phone number and password
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - phone
+ *               - password
+ *             properties:
+ *               phone:
+ *                 type: string
+ *                 example: "+1234567890"
+ *                 description: International phone number format (e.g., +1 for US, +44 for UK)
+ *               password:
+ *                 type: string
+ *                 example: "password123"
+ *                 description: User's password
+ *     responses:
+ *       200:
+ *         description: Successfully logged in
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Success"
+ *                 token:
+ *                   type: string
+ *                   example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *                 user:
+ *                   type: object
+ *                   description: User profile data (without password)
+ *       400:
+ *         description: Validation error (e.g., missing/invalid phone or password)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Validation Error"
+ *                 errors:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *       401:
+ *         description: Invalid credentials or account not active
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Invalid credentials"
+ */
+router.post('/customer/login', AuthController.phoneLogin);
 /**
  * @swagger
  * /api/auth/me:

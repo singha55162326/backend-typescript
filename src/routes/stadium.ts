@@ -1347,4 +1347,94 @@ router.get(
   StadiumController.checkFieldSlot
 );
 
+/**
+ * @swagger
+ * /api/stadiums/nearby:
+ *   get:
+ *     summary: Get nearby stadiums based on location
+ *     tags: [Stadiums]
+ *     parameters:
+ *       - in: query
+ *         name: lat
+ *         required: true
+ *         schema:
+ *           type: number
+ *         description: Latitude for location-based search
+ *       - in: query
+ *         name: lng
+ *         required: true
+ *         schema:
+ *           type: number
+ *         description: Longitude for location-based search
+ *       - in: query
+ *         name: radius
+ *         schema:
+ *           type: number
+ *         description: Search radius in kilometers (default 10km)
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 50
+ *         description: Items per page
+ *     responses:
+ *       200:
+ *         description: List of nearby stadiums
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Stadium'
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     page:
+ *                       type: number
+ *                     limit:
+ *                       type: number
+ *                     total:
+ *                       type: number
+ *                     pages:
+ *                       type: number
+ *                 location:
+ *                   type: object
+ *                   properties:
+ *                     latitude:
+ *                       type: number
+ *                     longitude:
+ *                       type: number
+ *                     radius:
+ *                       type: number
+ *       400:
+ *         description: Validation error or missing coordinates
+ *       500:
+ *         description: Failed to get stadiums
+ */
+router.get(
+  '/nearby',
+  [
+    query('lat').exists().withMessage('Latitude is required').isFloat({ min: -90, max: 90 }).withMessage('Latitude must be between -90 and 90'),
+    query('lng').exists().withMessage('Longitude is required').isFloat({ min: -180, max: 180 }).withMessage('Longitude must be between -180 and 180'),
+    query('radius').optional().isFloat({ min: 0.1, max: 100 }).withMessage('Radius must be between 0.1 and 100 km'),
+    query('page').optional().isInt({ min: 1 }),
+    query('limit').optional().isInt({ min: 1, max: 50 }),
+  ],
+  StadiumController.getNearbyStadiums
+);
+
 export default router;

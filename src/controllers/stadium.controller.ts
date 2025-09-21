@@ -1189,4 +1189,93 @@ export class StadiumController {
       next(error);
     }
   }
+
+  /**
+   * Get nearby stadiums based on user's location
+   */
+  static async getNearbyStadiums(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        res.status(400).json({
+          success: false,
+          errors: errors.array(),
+        });
+        return;
+      }
+
+      const page = Math.max(1, parseInt(req.query.page as string) || 1);
+      const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 10));
+      const skip = (page - 1) * limit;
+
+      // Get user's location from query parameters
+      const lat = req.query.lat ? parseFloat(req.query.lat as string) : null;
+      const lng = req.query.lng ? parseFloat(req.query.lng as string) : null;
+      
+      if (lat === null || lng === null) {
+        res.status(400).json({
+          success: false,
+          message: 'Latitude and longitude are required for nearby search',
+        });
+        return;
+      }
+
+      // Validate coordinates
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid coordinates provided',
+        });
+        return;
+      }
+
+      // Default radius is 10km, but can be customized
+      const radius = parseFloat(req.query.radius as string) || 10; // km
+      const maxDistance = radius * 1000; // Convert to meters
+
+      // Build query for nearby stadiums
+      const dbQuery: any = {
+        status: 'active',
+        'address.coordinates': {
+          $near: {
+            $geometry: {
+              type: 'Point',
+              coordinates: [lng, lat],
+            },
+            $maxDistance: maxDistance,
+          },
+        },
+      };
+
+      // Sorting by distance (nearest first)
+      const stadiums = await Stadium.find(dbQuery)
+        .populate('ownerId', 'firstName lastName email')
+        .select('-staff.bankAccountDetails')
+        .skip(skip)
+        .limit(limit)
+        .exec();
+
+      const total = await Stadium.countDocuments(dbQuery);
+      const totalPages = Math.ceil(total / limit);
+
+      res.json({
+        success: true,
+        message: 'Nearby stadiums retrieved successfully',
+        data: stadiums,
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: totalPages,
+        },
+        location: {
+          latitude: lat,
+          longitude: lng,
+          radius: radius,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
