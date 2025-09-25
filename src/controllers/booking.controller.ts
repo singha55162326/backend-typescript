@@ -972,7 +972,7 @@ static async getAllBookings(req: Request, res: Response, next: NextFunction): Pr
       // Authorization: Only owner, stadium owner or admin can generate invoice
       const isBookingOwner = booking.userId.toString() === req.user?.userId;
       const isStadiumOwner = (booking.stadiumId as any).ownerId.toString() === req.user?.userId;
-      const isAdmin = req.user?.role === 'superadmin';
+      const isAdmin = req.user?.role === 'superadmin' || req.user?.role === 'stadium_owner';
 
       if (!isBookingOwner && !isStadiumOwner && !isAdmin) {
         res.status(403).json({ success: false, message: 'Access denied' });
