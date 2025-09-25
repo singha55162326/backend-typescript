@@ -106,6 +106,29 @@ export class InvoiceService {
               fieldType: populatedField.fieldType || 'Unknown Type'
             };
             fieldName = ` - ${populatedField.name}`;
+          } else if (booking.fieldId && typeof booking.fieldId === 'object' && '_id' in booking.fieldId) {
+            // Handle case where fieldId is an object with _id but no name
+            const fieldObj = booking.fieldId as any;
+            fieldInfo = {
+              fieldId: fieldObj._id?.toString() || bookingFieldIdStr,
+              name: fieldObj.name || `Field ID: ${bookingFieldIdStr.substring(0, 8)}`,
+              fieldType: fieldObj.fieldType || 'Unknown Type'
+            };
+            fieldName = ` - ${fieldInfo.name}`;
+          } else if (typeof booking.fieldId === 'string') {
+            // If fieldId is just a string, try to find it in stadium fields
+            const field = stadium.fields.find((f: any) => {
+              return f._id && f._id.toString() === bookingFieldIdStr;
+            });
+            
+            if (field) {
+              fieldInfo = {
+                fieldId: bookingFieldIdStr,
+                name: field.name || 'Unknown Field',
+                fieldType: field.fieldType || 'Unknown Type'
+              };
+              fieldName = `  ${field.name}`;
+            }
           }
         }
       }
@@ -116,7 +139,7 @@ export class InvoiceService {
     // Build invoice items
     const items: IInvoiceItem[] = [
       {
-        description: `Field rental: ${stadium.name}${fieldName}`,
+        description: `${fieldName}`,
         quantity: booking.durationHours,
         unitPrice: booking.pricing.baseRate,
         total: booking.pricing.baseRate * booking.durationHours
