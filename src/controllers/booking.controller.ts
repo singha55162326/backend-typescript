@@ -289,7 +289,7 @@ static async getAllBookings(req: Request, res: Response, next: NextFunction): Pr
 
     const bookings = await Booking.find(query)
       .populate('userId', 'name email phone')
-      .populate('stadiumId', 'name address')
+      .populate('stadiumId', 'name address fields')
       .populate('fieldId', 'name fieldType')
       .sort({ createdAt: -1, bookingDate: -1 })
       .skip(skip)
@@ -326,7 +326,7 @@ static async getAllBookings(req: Request, res: Response, next: NextFunction): Pr
 
       const booking = await Booking.findById(bookingId)
         .populate('userId', 'name email phone')
-        .populate('stadiumId', 'name address phone manager')
+        .populate('stadiumId', 'name address phone manager fields ')
         .populate('fieldId', 'name fieldType')
         .populate('cancellation.cancelledBy', 'name role')
         .populate('history.changedBy', 'name role')
