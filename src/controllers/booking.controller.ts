@@ -595,10 +595,16 @@ static async getAllBookings(req: Request, res: Response, next: NextFunction): Pr
       }
 
       // Authorization: only user or admin
-      if (booking.userId.toString() !== req.user?.userId && req.user?.role !== 'superadmin') {
-        res.status(403).json({ success: false, message: 'Access denied' });
-        return;
-      }
+      // Authorization: only booking user, stadium_owner, or superadmin
+if (
+  booking.userId.toString() !== req.user?.userId &&
+  req.user?.role !== 'superadmin' &&
+  req.user?.role !== 'stadium_owner'
+) {
+  res.status(403).json({ success: false, message: 'Access denied' });
+  return;
+}
+
 
       const payments = booking.payments || [];
       const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
