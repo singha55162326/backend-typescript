@@ -455,7 +455,7 @@ router.put(
 router.post('/customer/login', [
   body('phone')
     .notEmpty().withMessage('Phone is required')
-    .matches(/^\+?[1-9]\d{7,14}$/).withMessage('Please enter a valid phone number (e.g. +85620XXXXXX)')
+    .matches(/^\+?[1-9]\d{7,14}$/).withMessage('Please enter a valid phone number (e.g. 20XXXXXX)')
 ], AuthController.phoneLogin);
 /**
  * @swagger
