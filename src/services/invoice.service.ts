@@ -10,7 +10,7 @@ export interface IInvoiceItem {
   total: number;
 }
 
-// Updated interface to include optional ownerName
+// Updated interface to include optional ownerName and QR code payment info
 export interface IInvoiceData {
   invoiceNumber: string;
   invoiceDate: Date;
@@ -47,6 +47,12 @@ export interface IInvoiceData {
   totalAmount: number;
   currency: string;
   paymentStatus: string;
+  // QR Code payment information
+  qrCodePayment?: {
+    qrCodeData?: string;
+    accountNumber?: string;
+    accountName?: string;
+  };
   notes?: string;
 }
 
@@ -96,39 +102,28 @@ export class InvoiceService {
             fieldType: field.fieldType || 'Unknown Type'
           };
           fieldName = ` - ${field.name}`;
-        } else {
-          // Try to get field name from populated fieldId in booking
-          if (booking.fieldId && typeof booking.fieldId === 'object' && 'name' in booking.fieldId) {
-            const populatedField = booking.fieldId as any;
+        } else if (booking.fieldId && typeof booking.fieldId === 'object' && '_id' in booking.fieldId) {
+          // Handle case where fieldId is an object with _id but no name
+          const fieldObj = booking.fieldId as any;
+          fieldInfo = {
+            fieldId: fieldObj._id?.toString() || bookingFieldIdStr,
+            name: fieldObj.name || `Field ID: ${bookingFieldIdStr.substring(0, 8)}`,
+            fieldType: fieldObj.fieldType || 'Unknown Type'
+          };
+          fieldName = ` - ${fieldInfo.name}`;
+        } else if (typeof booking.fieldId === 'string') {
+          // If fieldId is just a string, try to find it in stadium fields
+          const field = stadium.fields.find((f: any) => {
+            return f._id && f._id.toString() === bookingFieldIdStr;
+          });
+          
+          if (field) {
             fieldInfo = {
               fieldId: bookingFieldIdStr,
-              name: populatedField.name || 'Unknown Field',
-              fieldType: populatedField.fieldType || 'Unknown Type'
+              name: field.name || 'Unknown Field',
+              fieldType: field.fieldType || 'Unknown Type'
             };
-            fieldName = ` - ${populatedField.name}`;
-          } else if (booking.fieldId && typeof booking.fieldId === 'object' && '_id' in booking.fieldId) {
-            // Handle case where fieldId is an object with _id but no name
-            const fieldObj = booking.fieldId as any;
-            fieldInfo = {
-              fieldId: fieldObj._id?.toString() || bookingFieldIdStr,
-              name: fieldObj.name || `Field ID: ${bookingFieldIdStr.substring(0, 8)}`,
-              fieldType: fieldObj.fieldType || 'Unknown Type'
-            };
-            fieldName = ` - ${fieldInfo.name}`;
-          } else if (typeof booking.fieldId === 'string') {
-            // If fieldId is just a string, try to find it in stadium fields
-            const field = stadium.fields.find((f: any) => {
-              return f._id && f._id.toString() === bookingFieldIdStr;
-            });
-            
-            if (field) {
-              fieldInfo = {
-                fieldId: bookingFieldIdStr,
-                name: field.name || 'Unknown Field',
-                fieldType: field.fieldType || 'Unknown Type'
-              };
-              fieldName = `  ${field.name}`;
-            }
+            fieldName = `  ${field.name}`;
           }
         }
       }
@@ -139,7 +134,7 @@ export class InvoiceService {
     // Build invoice items
     const items: IInvoiceItem[] = [
       {
-        description: `${fieldName}`,
+        description: `Field Booking${fieldName}`,
         quantity: booking.durationHours,
         unitPrice: booking.pricing.baseRate,
         total: booking.pricing.baseRate * booking.durationHours
@@ -178,6 +173,21 @@ export class InvoiceService {
       ownerName = `${populatedOwner.firstName} ${populatedOwner.lastName}`;
     }
 
+    // Check for QR code payment information in the latest payment
+    let qrCodePayment = undefined;
+    if (booking.payments && booking.payments.length > 0) {
+      const latestPayment = booking.payments[booking.payments.length - 1];
+      // Type assertion to access QR code fields
+      const paymentWithQR = latestPayment as any;
+      if (paymentWithQR.paymentMethod === 'qrcode' && (paymentWithQR.qrCodeData || paymentWithQR.accountNumber)) {
+        qrCodePayment = {
+          qrCodeData: paymentWithQR.qrCodeData,
+          accountNumber: paymentWithQR.accountNumber,
+          accountName: paymentWithQR.accountName
+        };
+      }
+    }
+
     return {
       invoiceNumber,
       invoiceDate,
@@ -198,19 +208,20 @@ export class InvoiceService {
       stadium: {
         stadiumId: (stadium._id as mongoose.Types.ObjectId).toString(),
         name: stadium.name,
-        address: `${stadium.address.street || ''} ${stadium.address.city}, ${stadium.address.country}`,
-        phone: '', // Optional, stadium doesn't have phone
-        ownerId: stadium.ownerId.toString(), // Keep the ID for reference
-        ownerName: ownerName // Add owner name if available
+        address: stadium.address?.street || stadium.address?.city || '',
+        phone: '', // Stadium model doesn't have a phone field
+        ownerId: (stadium.ownerId as mongoose.Types.ObjectId).toString(),
+        ownerName
       },
-      field: fieldInfo, // Add field information
+      field: fieldInfo,
       items,
       subtotal,
       taxes,
       totalAmount,
       currency: booking.pricing.currency || 'LAK',
       paymentStatus: booking.paymentStatus,
-      notes: booking.notes || 'Thank you for your booking!'
+      qrCodePayment, // Include QR code payment information
+      notes: booking.notes || ''
     };
   }
 }

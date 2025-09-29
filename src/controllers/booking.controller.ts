@@ -9,6 +9,7 @@ import mongoose from 'mongoose';
 import { IPayment } from '../types/booking.types';
 import AvailabilityService from '../utils/availability';
 import { InvoiceService } from '../services/invoice.service';
+import { QRCodeGenerator } from '../utils/qrCodeGenerator';
 
 export class BookingController {
   /**
@@ -510,28 +511,59 @@ static async getAllBookings(req: Request, res: Response, next: NextFunction): Pr
   }
 
   /**
-   * Add payment to booking
+   * Add a payment to a booking
    */
   static async addPayment(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        res.status(400).json({ success: false, errors: errors.array() });
+        res.status(400).json({
+          success: false,
+          errors: errors.array()
+        });
         return;
       }
 
-      const booking = await Booking.findById(req.params.bookingId);
+      const { bookingId } = req.params;
+      const { paymentMethod, amount, transactionId, gatewayResponse, 
+              qrCodeData, accountNumber, accountName, generateQRCode } = req.body;
+
+      if (!mongoose.isValidObjectId(bookingId)) {
+        res.status(400).json({ success: false, message: 'Invalid booking ID' });
+        return;
+      }
+
+      const booking = await Booking.findById(bookingId);
       if (!booking) {
         res.status(404).json({ success: false, message: 'Booking not found' });
         return;
       }
 
-      if (booking.userId.toString() !== req.user?.userId && req.user?.role !== 'superadmin') {
-        res.status(403).json({ success: false, message: 'Not authorized' });
+      // Authorization: only booking user, stadium_owner, or superadmin
+      if (
+        booking.userId.toString() !== req.user?.userId &&
+        req.user?.role !== 'superadmin' &&
+        req.user?.role !== 'stadium_owner'
+      ) {
+        res.status(403).json({ success: false, message: 'Access denied' });
         return;
       }
 
-      const { paymentMethod, amount, transactionId, gatewayResponse } = req.body;
+      // Generate QR code if requested and payment method is QR code
+      let finalQRCodeData = qrCodeData;
+      if (paymentMethod === 'qrcode' && generateQRCode && accountNumber) {
+        try {
+          finalQRCodeData = await QRCodeGenerator.generateBankTransferQR({
+            accountNumber,
+            accountName: accountName || '',
+            amount,
+            currency: booking.pricing.currency || 'LAK'
+          });
+        } catch (qrError) {
+          console.error('Failed to generate QR code:', qrError);
+          // Continue without QR code if generation fails
+        }
+      }
 
       const payment: IPayment = {
         paymentMethod,
@@ -540,6 +572,10 @@ static async getAllBookings(req: Request, res: Response, next: NextFunction): Pr
         status: 'completed',
         transactionId,
         gatewayResponse,
+        // QR Code specific fields
+        qrCodeData: finalQRCodeData || undefined,
+        accountNumber: accountNumber || undefined,
+        accountName: accountName || undefined,
         processedAt: new Date(),
         createdAt: new Date()
       };
@@ -550,20 +586,67 @@ static async getAllBookings(req: Request, res: Response, next: NextFunction): Pr
       booking.payments.push(payment);
 
       // Update payment status
-      if (booking.payments.reduce((sum, p) => sum + p.amount, 0) >= booking.pricing.totalAmount) {
+      const totalPaid = booking.payments.reduce((sum, p) => sum + p.amount, 0);
+      if (totalPaid >= booking.pricing.totalAmount) {
         booking.paymentStatus = 'paid';
       } else {
         booking.paymentStatus = 'pending';
       }
 
-      booking.history.push({
-        action: 'updated',
-        changedBy: new mongoose.Types.ObjectId(req.user.userId),
+      // Debug logging to understand the user object
+      console.log('req.user:', req.user);
+      console.log('req.user?.userId:', req.user?.userId);
+      console.log('booking history length before push:', booking.history.length);
+      
+      // Debug existing history items
+      for (let i = 0; i < booking.history.length; i++) {
+        console.log(`history[${i}]:`, JSON.stringify(booking.history[i], null, 2));
+        // Fix any incomplete history items
+        if (!booking.history[i].changedBy) {
+          console.log(`Fixing incomplete history item at index ${i}`);
+          // Use the booking userId as a fallback if it's valid
+          if (booking.userId && mongoose.Types.ObjectId.isValid(booking.userId.toString())) {
+            booking.history[i].changedBy = booking.userId;
+          } else {
+            // If booking userId is also invalid, use the current user
+            booking.history[i].changedBy = new mongoose.Types.ObjectId(req.user.userId);
+          }
+        }
+      }
+      
+      // Ensure we have a valid user ID
+      if (!req.user || !req.user.userId) {
+        throw new Error('User information is missing - cannot create history item');
+      }
+      
+      // Validate that userId is a valid ObjectId string
+      if (!mongoose.Types.ObjectId.isValid(req.user.userId)) {
+        throw new Error(`Invalid user ID format: ${req.user.userId}`);
+      }
+      
+      // Explicitly create the ObjectId to ensure it's properly formed
+      const changedByObjectId = new mongoose.Types.ObjectId(req.user.userId);
+      console.log('created changedByObjectId:', changedByObjectId);
+      
+      // Create history item with explicit ObjectId
+      const historyItem = {
+        action: 'updated' as const,
+        changedBy: changedByObjectId,
         newValues: { paymentStatus: booking.paymentStatus },
-        notes: `Payment of ${amount} ${booking.pricing.currency} received via ${paymentMethod}`
-      } as any);
+        notes: `Payment of ${amount} ${booking.pricing.currency} received via ${paymentMethod}`,
+        timestamp: new Date()
+      };
+      
+      booking.history.push(historyItem as any);
+      console.log('booking history length after push:', booking.history.length);
 
-      await booking.save();
+      try {
+        await booking.save();
+        console.log('Booking saved successfully');
+      } catch (saveError) {
+        console.error('Error saving booking:', saveError);
+        throw saveError;
+      }
 
       res.json({
         success: true,
@@ -571,6 +654,7 @@ static async getAllBookings(req: Request, res: Response, next: NextFunction): Pr
         data: booking
       });
     } catch (error) {
+      console.error('Error in addPayment:', error);
       next(error);
     }
   }

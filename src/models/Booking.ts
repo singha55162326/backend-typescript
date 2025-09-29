@@ -1,29 +1,5 @@
 import mongoose, { Document, Model, Schema } from 'mongoose';
-
-interface IRefereeCharge {
-  staffId: mongoose.Types.ObjectId;
-  refereeName: string;
-  hours: number;
-  rate: number;
-  total: number;
-}
-
-interface IDiscount {
-  type: string;
-  amount: number;
-  description: string;
-}
-
-interface IPayment {
-  paymentMethod: 'credit_card' | 'debit_card' | 'bank_transfer' | 'digital_wallet' | 'cash';
-  amount: number;
-  currency: string;
-  status: 'pending' | 'completed' | 'failed' | 'cancelled' | 'refunded';
-  transactionId?: string;
-  gatewayResponse?: any;
-  processedAt?: Date;
-  createdAt: Date;
-}
+import { IRefereeCharge, IDiscount, IPayment } from '../types/booking.types';
 
 interface IAssignedStaff {
   staffId: mongoose.Types.ObjectId;
@@ -84,7 +60,7 @@ export interface IBooking extends Document {
   notes?: string;
   specialRequests?: string[];
   assignedStaff?: IAssignedStaff[];
-  payments?: IPayment[];
+  payments?: import('../types/booking.types').IPayment[];
   cancellation?: ICancellation;
   history: IHistoryItem[];
 }
@@ -116,6 +92,10 @@ const paymentSchema = new Schema<IPayment>({
     enum: ['pending', 'completed', 'failed', 'cancelled', 'refunded'],
     default: 'pending'
   },
+  // QR Code specific fields
+  qrCodeData: { type: String }, // Base64 encoded QR code image
+  accountNumber: { type: String }, // Bank account number
+  accountName: { type: String }, // Account holder name
   transactionId: String,
   gatewayResponse: Schema.Types.Mixed,
   processedAt: Date,

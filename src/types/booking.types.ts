@@ -16,10 +16,14 @@ export interface IDiscount {
 }
 
 export interface IPayment {
-  paymentMethod: 'credit_card' | 'debit_card' | 'bank_transfer' | 'digital_wallet' | 'cash';
+  paymentMethod: 'credit_card' | 'debit_card' | 'bank_transfer' | 'digital_wallet' | 'cash' | 'qrcode';
   amount: number;
   currency: string;
   status: 'pending' | 'completed' | 'failed' | 'cancelled' | 'refunded';
+  // QR Code specific fields
+  qrCodeData?: string; // Base64 encoded QR code image
+  accountNumber?: string; // Bank account number
+  accountName?: string; // Account holder name
   transactionId?: string;
   gatewayResponse?: any;
   processedAt?: Date;

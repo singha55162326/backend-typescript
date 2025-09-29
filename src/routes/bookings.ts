@@ -727,8 +727,9 @@ router.put('/:bookingId/confirm', authenticateToken, BookingController.confirmBo
  */
 router.post('/:bookingId/payment', [
   authenticateToken,
-  body('paymentMethod').isIn(['credit_card', 'debit_card', 'bank_transfer', 'digital_wallet', 'cash']),
+  body('paymentMethod').isIn(['credit_card', 'debit_card', 'bank_transfer', 'digital_wallet', 'cash', 'qrcode']),
   body('amount').isFloat({ min: 0.01 }),
+  body('currency').optional().trim(),
   body('transactionId').optional().trim()
 ], BookingController.addPayment);
 
