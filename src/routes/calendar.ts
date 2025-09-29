@@ -172,7 +172,7 @@ router.get('/admin-events', [
   authorizeRoles(['superadmin']),
   query('startDate').notEmpty().isISO8601(),
   query('endDate').notEmpty().isISO8601(),
-  query('stadiumId').optional().isMongoId()
+  query('stadiumId').optional().isMongoId(), // Add stadiumId as optional
 ], CalendarController.getAdminCalendarEvents);
 
 /**

@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { validationResult } from 'express-validator';
 import { CalendarService } from '../services/calendar.service';
 import moment from 'moment';
+import mongoose from 'mongoose';
 
 export class CalendarController {
   /**
@@ -147,72 +148,86 @@ export class CalendarController {
   /**
    * Get calendar events for admin
    */
-  static async getAdminCalendarEvents(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        res.status(400).json({
-          success: false,
-          message: 'Validation error',
-          errors: errors.array()
-        });
-        return;
-      }
-
-      const { startDate, endDate, stadiumId } = req.query;
-      
-      // Validate dates
-      if (!startDate || !endDate) {
-        res.status(400).json({
-          success: false,
-          message: 'Start date and end date are required'
-        });
-        return;
-      }
-      
-      const start = moment(startDate as string, 'YYYY-MM-DD', true);
-      const end = moment(endDate as string, 'YYYY-MM-DD', true);
-      
-      if (!start.isValid() || !end.isValid()) {
-        res.status(400).json({
-          success: false,
-          message: 'Invalid date format. Please use YYYY-MM-DD'
-        });
-        return;
-      }
-      
-      if (end.isBefore(start)) {
-        res.status(400).json({
-          success: false,
-          message: 'End date must be after start date'
-        });
-        return;
-      }
-      
-      // Limit date range to 1 year maximum
-      if (end.diff(start, 'days') > 365) {
-        res.status(400).json({
-          success: false,
-          message: 'Date range cannot exceed 1 year'
-        });
-        return;
-      }
-      
-      const events = await CalendarService.getAdminCalendarEvents(
-        start.toDate(),
-        end.toDate(),
-        stadiumId as string | undefined
-      );
-      
-      res.json({
-        success: true,
-        message: 'Calendar events retrieved successfully',
-        data: events
+static async getAdminCalendarEvents(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: errors.array()
       });
-    } catch (error) {
-      next(error);
+      return;
     }
+
+    const { startDate, endDate, stadiumId } = req.query;
+    
+    // Validate dates
+    if (!startDate || !endDate) {
+      res.status(400).json({
+        success: false,
+        message: 'Start date and end date are required'
+      });
+      return;
+    }
+    
+    const start = moment(startDate as string, 'YYYY-MM-DD', true);
+    const end = moment(endDate as string, 'YYYY-MM-DD', true);
+    
+    if (!start.isValid() || !end.isValid()) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid date format. Please use YYYY-MM-DD'
+      });
+      return;
+    }
+    
+    if (end.isBefore(start)) {
+      res.status(400).json({
+        success: false,
+        message: 'End date must be after start date'
+      });
+      return;
+    }
+    
+    // Limit date range to 1 year maximum
+    if (end.diff(start, 'days') > 365) {
+      res.status(400).json({
+        success: false,
+        message: 'Date range cannot exceed 1 year'
+      });
+      return;
+    }
+    
+    // Validate stadiumId if provided
+    let stadiumIdStr: string | undefined;
+    if (stadiumId && stadiumId !== 'undefined' && stadiumId !== '') {
+      if (!mongoose.Types.ObjectId.isValid(stadiumId as string)) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid stadium ID format'
+        });
+        return;
+      }
+      stadiumIdStr = stadiumId as string;
+    }
+    
+    const events = await CalendarService.getAdminCalendarEvents(
+      start.toDate(),
+      end.toDate(),
+      stadiumIdStr
+    );
+    
+    res.json({
+      success: true,
+      message: 'Calendar events retrieved successfully',
+      data: events
+    });
+  } catch (error) {
+    console.error('Admin calendar events error:', error);
+    next(error);
   }
+}
 
   /**
    * Get calendar events for a specific stadium
@@ -581,10 +596,23 @@ export class CalendarController {
         return;
       }
       
+      // Validate stadiumId if provided
+      let stadiumIdStr: string | undefined;
+      if (stadiumId && stadiumId !== 'undefined' && stadiumId !== '') {
+        if (!mongoose.Types.ObjectId.isValid(stadiumId as string)) {
+          res.status(400).json({
+            success: false,
+            message: 'Invalid stadium ID format'
+          });
+          return;
+        }
+        stadiumIdStr = stadiumId as string;
+      }
+      
       const visualData = await CalendarService.getAdminVisualCalendarData(
         start.toDate(),
         end.toDate(),
-        stadiumId as string | undefined
+        stadiumIdStr
       );
       
       res.json({
