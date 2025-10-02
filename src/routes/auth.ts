@@ -27,6 +27,9 @@ router.post('/register', [
   body('lastName').trim().isLength({ min: 1 })
 ], AuthController.register);
 
+router.post("/register-request", AuthController.registerRequest);
+router.post("/register-verify", AuthController.registerVerify);
+
 /**
  * @swagger
  * /api/auth/login:
