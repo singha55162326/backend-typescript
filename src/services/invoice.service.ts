@@ -34,7 +34,7 @@ export interface IInvoiceData {
     address: string;
     phone: string;
     ownerId: string;
-    ownerName?: string; // Make ownerName optional
+    ownerName?: string; // Keep this optional
   };
   field?: { // Add optional field information
     fieldId: string;
@@ -71,7 +71,11 @@ export class InvoiceService {
     dueDate.setDate(dueDate.getDate() + 7);
 
     // Find the field information from the stadium's fields array
-    let fieldInfo = undefined;
+    let fieldInfo: {
+      fieldId: string;
+      name: string;
+      fieldType: string;
+    } | undefined = undefined;
     let fieldName = '';
     
     try {
@@ -123,7 +127,7 @@ export class InvoiceService {
               name: field.name || 'Unknown Field',
               fieldType: field.fieldType || 'Unknown Type'
             };
-            fieldName = `  ${field.name}`;
+            fieldName = ` - ${field.name}`;
           }
         }
       }
@@ -167,14 +171,18 @@ export class InvoiceService {
     const totalAmount = subtotal + taxes;
 
     // Check if stadium owner is populated with name details
-    let ownerName = undefined;
+    let ownerName: string | undefined = undefined;
     if (stadium.ownerId && typeof stadium.ownerId === 'object' && 'firstName' in stadium.ownerId) {
       const populatedOwner = stadium.ownerId as any;
-      ownerName = `${populatedOwner.firstName} ${populatedOwner.lastName}`;
+      ownerName = `${populatedOwner.firstName || ''} ${populatedOwner.lastName || ''}`.trim() || undefined;
     }
 
     // Check for QR code payment information in the latest payment
-    let qrCodePayment = undefined;
+    let qrCodePayment: {
+      qrCodeData?: string;
+      accountNumber?: string;
+      accountName?: string;
+    } | undefined = undefined;
     if (booking.payments && booking.payments.length > 0) {
       const latestPayment = booking.payments[booking.payments.length - 1];
       // Type assertion to access QR code fields
@@ -202,7 +210,7 @@ export class InvoiceService {
       customer: {
         customerId: (customer._id as mongoose.Types.ObjectId).toString(),
         name: `${customer.firstName} ${customer.lastName}`,
-        email: customer.email,
+        email: customer.email || '',
         phone: customer.phone || ''
       },
       stadium: {
@@ -211,7 +219,7 @@ export class InvoiceService {
         address: stadium.address?.street || stadium.address?.city || '',
         phone: '', // Stadium model doesn't have a phone field
         ownerId: (stadium.ownerId as mongoose.Types.ObjectId).toString(),
-        ownerName
+        ownerName // This can be undefined, which is allowed by the interface
       },
       field: fieldInfo,
       items,
