@@ -525,6 +525,173 @@ router.post(
   }
 );
 
+/**
+ * @swagger
+ * /api/stadiums/{stadiumId}/staff/{staffId}:
+ *   put:
+ *     summary: Update staff/referee in stadium (owner/admin only)
+ *     tags: [Stadiums]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: stadiumId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Stadium ID
+ *       - in: path
+ *         name: staffId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Staff ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *                 enum: [manager, referee, maintenance, security]
+ *               phone:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               specializations:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               certifications:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     type:
+ *                       type: string
+ *                     level:
+ *                       type: string
+ *                     issuedDate:
+ *                       type: string
+ *                     expiryDate:
+ *                       type: string
+ *                     certificateNumber:
+ *                       type: string
+ *               availability:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     dayOfWeek:
+ *                       type: number
+ *                       minimum: 0
+ *                       maximum: 6
+ *                     startTime:
+ *                       type: string
+ *                     endTime:
+ *                       type: string
+ *                     isAvailable:
+ *                       type: boolean
+ *               rates:
+ *                 type: object
+ *                 properties:
+ *                   hourlyRate:
+ *                     type: number
+ *                   currency:
+ *                     type: string
+ *                   overtime:
+ *                     type: number
+ *               status:
+ *                 type: string
+ *                 enum: [active, inactive, suspended]
+ *     responses:
+ *       200:
+ *         description: Staff member updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   $ref: '#/components/schemas/Stadium/properties/staff/items'
+ *       400:
+ *         description: Validation error
+ *       403:
+ *         description: Unauthorized access
+ *       404:
+ *         description: Stadium or staff member not found
+ *       500:
+ *         description: Failed to update staff member
+ */
+router.put(
+  '/:stadiumId/staff/:staffId',
+  [
+    authenticateToken,
+    authorizeRoles(['stadium_owner', 'superadmin']),
+    body('name').optional().trim().isLength({ min: 1 }).withMessage('Staff name cannot be empty'),
+    body('role').optional().isIn(['manager', 'referee', 'maintenance', 'security']).withMessage('Invalid role'),
+    body('rates.hourlyRate').optional().isNumeric().withMessage('Hourly rate must be a number'),
+    body('status').optional().isIn(['active', 'inactive', 'suspended']).withMessage('Invalid status'),
+  ],
+  StadiumController.updateStaff
+);
+
+/**
+ * @swagger
+ * /api/stadiums/{stadiumId}/staff/{staffId}:
+ *   delete:
+ *     summary: Delete staff/referee from stadium (owner/admin only)
+ *     tags: [Stadiums]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: stadiumId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Stadium ID
+ *       - in: path
+ *         name: staffId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Staff ID
+ *     responses:
+ *       200:
+ *         description: Staff member deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *       403:
+ *         description: Unauthorized access
+ *       404:
+ *         description: Stadium or staff member not found
+ *       500:
+ *         description: Failed to delete staff member
+ */
+router.delete(
+  '/:stadiumId/staff/:staffId',
+  [
+    authenticateToken,
+    authorizeRoles(['stadium_owner', 'superadmin']),
+  ],
+  StadiumController.deleteStaff
+);
 
 /**
  * @swagger

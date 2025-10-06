@@ -7,7 +7,7 @@ declare module 'express' {
     user?: {
       userId: string;
       role: string;
-      email: string;
+      email?: string | null;
     };
   }
 }
@@ -38,7 +38,7 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
     req.user = {
       userId: (user._id as string).toString(),
       role: user.role,
-      email: user.email
+      email: user.email || null
     };
     
     next();
@@ -71,4 +71,3 @@ export const authorizeRoles = (roles: string[]) => {
     return;
   };
 };
-

@@ -26,17 +26,20 @@ export class AuthController {
 
       const { email, password, firstName, lastName, phone, role, referralCode } = req.body;
 
-      const existingUser = await User.findOne({ email });
-      if (existingUser) {
-        res.status(400).json({
-          success: false,
-          message: TranslationService.t('userAlreadyExists')
-        });
-        return;
+      // Check if email is provided and user already exists
+      if (email) {
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+          res.status(400).json({
+            success: false,
+            message: TranslationService.t('userAlreadyExists')
+          });
+          return;
+        }
       }
 
       const user = new User({
-        email,
+        email: email || undefined,
         passwordHash: password,
         firstName,
         lastName,
@@ -89,6 +92,16 @@ export class AuthController {
       }
 
       const { email, password } = req.body;
+      
+      // If email is not provided, we can't login with email
+      if (!email) {
+        res.status(400).json({
+          success: false,
+          message: TranslationService.t('emailRequiredForLogin')
+        });
+        return;
+      }
+      
       const user = await User.findOne({ email });
       if (!user) {
         res.status(401).json({
@@ -333,17 +346,20 @@ export class AuthController {
 
       const { email, password, firstName, lastName, phone, role, status } = req.body;
 
-      const existingUser = await User.findOne({ email });
-      if (existingUser) {
-        res.status(400).json({
-          success: false,
-          message: TranslationService.t('userAlreadyExists')
-        });
-        return;
+      // Check if email is provided and user already exists
+      if (email) {
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+          res.status(400).json({
+            success: false,
+            message: TranslationService.t('userAlreadyExists')
+          });
+          return;
+        }
       }
 
       const user = new User({
-        email,
+        email: email || null, // Explicitly set to null if not provided
         passwordHash: password,
         firstName,
         lastName,
@@ -414,6 +430,11 @@ export class AuthController {
 
       const { id } = req.params;
       const updates = req.body;
+
+      // Handle email update properly
+      if ('email' in updates && !updates.email) {
+        updates.email = null;
+      }
 
       const user = await User.findByIdAndUpdate(
         id,
@@ -504,6 +525,11 @@ export class AuthController {
         updateData.passwordHash = password;
       }
 
+      // Handle email properly
+      if ('email' in req.body) {
+        updateData.email = req.body.email || null;
+      }
+
       if (Object.keys(updateData).length === 0) {
         res.status(400).json({
           success: false,
@@ -558,6 +584,11 @@ export class AuthController {
       if (updates.firstName) user.firstName = updates.firstName.trim();
       if (updates.lastName) user.lastName = updates.lastName.trim();
       if (updates.phone) user.phone = updates.phone.trim();
+      
+      // Handle email update
+      if ('email' in updates) {
+        user.email = updates.email || null;
+      }
       
       // Update profile object if provided
       if (updates.profile) {
@@ -677,7 +708,7 @@ export class AuthController {
         expiresAt,
         verified: false,
         userData: {
-          email,
+          email: email || null, // Explicitly set to null if not provided
           password,
           firstName,
           lastName,
@@ -740,7 +771,7 @@ export class AuthController {
       const { email, password, firstName, lastName, role } = otpDoc.userData;
 
       const user = new User({
-        email,
+        email: email || null, // Explicitly set to null if not provided
         passwordHash: password,
         firstName,
         lastName,

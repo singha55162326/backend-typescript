@@ -24,7 +24,7 @@ class NotificationService {
       const user = await User.findById(booking.userId);
       const stadium = await Stadium.findById(booking.stadiumId);
       
-      if (!user || !stadium) return;
+      if (!user || !stadium || !user.email) return;
 
       const emailContent = `
         Dear ${user.firstName},
@@ -66,7 +66,7 @@ class NotificationService {
       const stadium = await Stadium.findById(booking.stadiumId);
       const field = booking.fieldId;
       
-      if (!user || !stadium) return;
+      if (!user || !stadium || !user.email) return;
       
       const emailContent = `
         Dear ${user.firstName},

@@ -10,14 +10,14 @@ if (!fs.existsSync(uploadDir)) {
 
 const storage = multer.diskStorage({
   destination: (
-    _: Express.Request,
-    __: Express.Multer.File,
+    _req: Express.Request | any,
+    _file: Express.Multer.File,
     cb: (error: Error | null, destination: string) => void
   ) => {
     cb(null, uploadDir);
   },
   filename: (
-    _: Express.Request,
+    _req: Express.Request | any,
     file: Express.Multer.File,
     cb: (error: Error | null, filename: string) => void
   ) => {
@@ -28,8 +28,8 @@ const storage = multer.diskStorage({
 
 export const uploadStadiumImages = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // max 5MB
-  fileFilter: (_, file, cb) => {
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+  fileFilter: (_req: Express.Request | any, file, cb) => {
     const allowed = /jpeg|jpg|png|webp/;
     const ext = path.extname(file.originalname).toLowerCase();
     if (allowed.test(ext)) {

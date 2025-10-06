@@ -34,7 +34,7 @@ interface IOwnerProfile {
 }
 
 export interface IUser extends Document {
-  email: string;
+  email?: string | null;
   passwordHash: string;
   firstName: string;
   lastName: string;
@@ -53,8 +53,10 @@ const userSchema: Schema<IUser> = new mongoose.Schema({
     type: String,
     required: false,
     unique: true,
+    sparse: true,
     lowercase: true,
-    trim: true
+    trim: true,
+    index: true
   },
   passwordHash: {
     type: String,

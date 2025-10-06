@@ -21,7 +21,7 @@ const router = Router();
  *     tags: [Authentication]
  */
 router.post('/register', [
-  body('email').isEmail().normalizeEmail(),
+  body('email').optional({ nullable: true }).isEmail().normalizeEmail(),
   body('password').isLength({ min: 6 }),
   body('firstName').trim().isLength({ min: 1 }),
   body('lastName').trim().isLength({ min: 1 })
@@ -38,7 +38,7 @@ router.post("/register-verify", AuthController.registerVerify);
  *     tags: [Authentication]
  */
 router.post('/login', [
-  body('email').isEmail().normalizeEmail(),
+  body('email').optional({ nullable: true }).isEmail().normalizeEmail(),
   body('password').isLength({ min: 1 })
 ], AuthController.login);
 
@@ -189,11 +189,6 @@ router.put('/users/:id/verify',
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - email
- *               - password
- *               - firstName
- *               - lastName
  *             properties:
  *               email:
  *                 type: string
@@ -222,7 +217,7 @@ router.post(
   authenticateToken,
   requireAdmin,
   [
-    body('email').isEmail().normalizeEmail().withMessage('Must be a valid email'),
+    body('email').optional({ nullable: true }).isEmail().normalizeEmail().withMessage('Must be a valid email'),
     body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
     body('firstName').trim().notEmpty().withMessage('First name is required'),
     body('lastName').trim().notEmpty().withMessage('Last name is required'),
