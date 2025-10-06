@@ -2,9 +2,11 @@ import { Request, Response, NextFunction } from 'express';
 import { validationResult } from 'express-validator';
 import jwt from 'jsonwebtoken';
 import User from '../models/User';
+import Otp from '../models/Otp.model';
 import { LoyaltyController } from './loyalty.controller';
 import { Types } from 'mongoose';
 import { TranslationService } from '../services/translation.service';
+import axios from 'axios';
 
 export class AuthController {
   /**
@@ -648,5 +650,124 @@ export class AuthController {
       next(error);
     }
   }
-  
+
+  static async registerRequest(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const { email, password, firstName, lastName, phone, role } = req.body;
+
+      // ✅ เช็คว่าเบอร์ซ้ำหรือไม่
+      const existingOtp = await Otp.findOne({ phone, verified: false });
+      if (existingOtp) {
+        await existingOtp.deleteOne(); // เคลียร์ OTP เดิม
+      }
+
+      // ✅ สร้างรหัส OTP
+      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      console.log("otpCode***", otpCode);
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 นาที
+
+      // ✅ เก็บลง Otp collection พร้อมข้อมูล user ชั่วคราว
+      await Otp.create({
+        phone,
+        code: otpCode,
+        expiresAt,
+        verified: false,
+        userData: {
+          email,
+          password,
+          firstName,
+          lastName,
+          role: role || "general_user",
+        },
+      });
+
+      console.log("OTP_API_KEY", process.env.OTP_API_KEY);
+
+      const OTP_API_KEY = process.env.OTP_API_KEY || "7208904513a4912f236df28b9cb4ffdcc33f16d689500bab77fd1c6a99e214d8";
+
+
+      // ✅ ส่ง SMS
+      await axios.post(
+        "https://otp.dmaidly.com/send-sms",
+        {
+          phone,
+          msg: `Your OTP is ${otpCode}`,
+        },
+        {
+          headers: {
+            accept: "application/json",
+            Authorization: `Bearer ${OTP_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      res.json({ success: true, message: "OTP sent, please verify" });
+    } catch (err) {
+      console.error("Register request error:",err);
+      next(err);
+    }
+  }
+
+
+  static async registerVerify(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const { phone, code } = req.body;
+
+      const otpDoc: any = await Otp.findOne({ phone, code });
+      console.log("otpDoc", otpDoc);
+      if (!otpDoc) {
+        res.status(400).json({ success: false, message: "Invalid OTP" });
+        return;
+      }
+
+      if (otpDoc.expiresAt < new Date()) {
+        res.status(400).json({ success: false, message: "OTP expired" });
+        return;
+      }
+
+      otpDoc.verified = true;
+      await otpDoc.save();
+
+      const { email, password, firstName, lastName, role } = otpDoc.userData;
+
+      const user = new User({
+        email,
+        passwordHash: password,
+        firstName,
+        lastName,
+        phone,
+        role,
+      });
+
+      await user.save();
+      await otpDoc.deleteOne();
+
+      const token = jwt.sign(
+        { userId: user._id, role: user.role },
+        process.env.JWT_SECRET || "secret",
+        { expiresIn: "7d" }
+      );
+
+      res.status(201).json({
+        success: true,
+        message: "Registration completed",
+        token,
+        user,
+      });
+      return; 
+    } catch (err) {
+      console.error("Register verify error:", err);
+      next(err);
+    }
+  }
+
 }
