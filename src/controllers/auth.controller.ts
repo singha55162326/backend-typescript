@@ -688,9 +688,19 @@ export class AuthController {
     next: NextFunction
   ) {
     try {
-      const { email, password, firstName, lastName, phone, role } = req.body;
+      const {password, firstName, lastName, phone, role } = req.body;
 
-      // ✅ เช็คว่าเบอร์ซ้ำหรือไม่
+      // ✅ เช็คว่าเบอร์ซ้ําหรือไม่
+      const existingUser = await User.findOne({ phone });
+      if (existingUser) {
+        res.status(400).json({
+          success: false,
+          message: "ເບີໂທນີ້ຖືກລົງທະບຽນແລ້ວ",
+        });
+        return;
+      }
+
+      // ✅ เช็คว่าเบอร์ซ้ําหรือไม่ OTP
       const existingOtp = await Otp.findOne({ phone, verified: false });
       if (existingOtp) {
         await existingOtp.deleteOne(); // เคลียร์ OTP เดิม
@@ -708,7 +718,7 @@ export class AuthController {
         expiresAt,
         verified: false,
         userData: {
-          email: email || null, // Explicitly set to null if not provided
+          // email: email || null, // Explicitly set to null if not provided
           password,
           firstName,
           lastName,
@@ -716,7 +726,7 @@ export class AuthController {
         },
       });
 
-      console.log("OTP_API_KEY", process.env.OTP_API_KEY);
+      // console.log("OTP_API_KEY", process.env.OTP_API_KEY);
 
       const OTP_API_KEY = process.env.OTP_API_KEY || "7208904513a4912f236df28b9cb4ffdcc33f16d689500bab77fd1c6a99e214d8";
 
@@ -756,7 +766,7 @@ export class AuthController {
       const otpDoc: any = await Otp.findOne({ phone, code });
       console.log("otpDoc", otpDoc);
       if (!otpDoc) {
-        res.status(400).json({ success: false, message: "Invalid OTP" });
+        res.status(400).json({ success: false, message: "OTP ບໍ່ຖືກຕ້ອງ" });
         return;
       }
 
@@ -768,10 +778,9 @@ export class AuthController {
       otpDoc.verified = true;
       await otpDoc.save();
 
-      const { email, password, firstName, lastName, role } = otpDoc.userData;
+      const { password, firstName, lastName, role } = otpDoc.userData;
 
       const user = new User({
-        email: email || null, // Explicitly set to null if not provided
         passwordHash: password,
         firstName,
         lastName,

@@ -6,3 +6,4 @@ export { AnalyticsController } from './analytics.controller';
 export { UserController } from './user.controller';
 export { ReviewController } from './review.controller';
 export { LoyaltyController } from './loyalty.controller';
+export { FaqController } from './faq.controller';

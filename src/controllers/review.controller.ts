@@ -31,7 +31,7 @@ export class ReviewController {
         _id: bookingId,
         userId,
         stadiumId,
-        status: 'completed'
+        status: { $in: ['confirmed', 'complete'] } // Accept both status
       });
 
       if (!booking) {

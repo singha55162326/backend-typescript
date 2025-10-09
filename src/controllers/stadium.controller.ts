@@ -838,7 +838,7 @@ export class StadiumController {
             name: field.name,
             type: field.fieldType,
             isAvailable: true,
-            reason: 'Time slot is available for booking',
+            reason: 'ເວລານີ້ຫວ່າງ',
             pricing: {
               rate,
               duration,
@@ -1170,7 +1170,7 @@ export class StadiumController {
         success: true,
         data: {
           isAvailable: true,
-          reason: 'Time slot is available for booking',
+          reason: 'ເວລານີ້ຫວ່າງ',
           pricing: {
             rate,
             duration,
