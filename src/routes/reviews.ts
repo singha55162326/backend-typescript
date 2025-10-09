@@ -65,6 +65,46 @@ router.post('/',
 
 /**
  * @swagger
+ * /api/reviews/all:
+ *   get:
+ *     summary: Get all reviews (superadmin) or reviews for owned stadiums (stadium_owner)
+ *     tags: [Reviews]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, approved, rejected, all]
+ *           default: all
+ *     responses:
+ *       200:
+ *         description: Reviews retrieved successfully
+ */
+router.get('/all',
+  authenticateToken,
+  authorizeRoles(['superadmin', 'stadium_owner']),
+  [
+    query('page').optional().isInt({ min: 1 }).toInt(),
+    query('limit').optional().isInt({ min: 1, max: 100 }).toInt(),
+    query('status').optional().isIn(['pending', 'approved', 'rejected', 'all'])
+  ],
+  ReviewController.getAllReviews
+);
+
+/**
+ * @swagger
  * /api/reviews/stadium/{stadiumId}:
  *   get:
  *     summary: Get reviews for a stadium

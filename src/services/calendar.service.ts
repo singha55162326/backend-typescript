@@ -182,8 +182,11 @@ export class CalendarService {
           fieldName = this.getFieldName(stadium, (booking as any).fieldId.toString());
         }
         
-        const startDateTime = new Date(`${(booking as any).bookingDate.toISOString().split('T')[0]}T${(booking as any).startTime}`);
-        const endDateTime = new Date(`${(booking as any).bookingDate.toISOString().split('T')[0]}T${(booking as any).endTime}`);
+        // Create date objects using moment with timezone to avoid timezone issues
+        const startDateStr = `${(booking as any).bookingDate.toISOString().split('T')[0]}T${(booking as any).startTime}`;
+        const endDateStr = `${(booking as any).bookingDate.toISOString().split('T')[0]}T${(booking as any).endTime}`;
+        const startDateTime = new Date(startDateStr);
+        const endDateTime = new Date(endDateStr);
         
         const colors = this.getStatusColors((booking as any).status);
         
@@ -270,8 +273,11 @@ export class CalendarService {
           fieldName = this.getFieldName(stadium, booking.fieldId.toString());
         }
         
-        const startDateTime = new Date(`${booking.bookingDate.toISOString().split('T')[0]}T${booking.startTime}`);
-        const endDateTime = new Date(`${booking.bookingDate.toISOString().split('T')[0]}T${booking.endTime}`);
+        // Create date objects using moment with timezone to avoid timezone issues
+        const startDateStr = `${booking.bookingDate.toISOString().split('T')[0]}T${booking.startTime}`;
+        const endDateStr = `${booking.bookingDate.toISOString().split('T')[0]}T${booking.endTime}`;
+        const startDateTime = new Date(startDateStr);
+        const endDateTime = new Date(endDateStr);
         
         const colors = this.getStatusColors(booking.status);
         
@@ -468,8 +474,11 @@ export class CalendarService {
           fieldName = this.getFieldName(stadium, booking.fieldId.toString());
         }
         
-        const startDateTime = new Date(`${booking.bookingDate.toISOString().split('T')[0]}T${booking.startTime}`);
-        const endDateTime = new Date(`${booking.bookingDate.toISOString().split('T')[0]}T${booking.endTime}`);
+        // Create date objects using moment with timezone to avoid timezone issues
+        const startDateStr = `${booking.bookingDate.toISOString().split('T')[0]}T${booking.startTime}`;
+        const endDateStr = `${booking.bookingDate.toISOString().split('T')[0]}T${booking.endTime}`;
+        const startDateTime = new Date(startDateStr);
+        const endDateTime = new Date(endDateStr);
         
         const colors = this.getStatusColors(booking.status);
         
@@ -601,8 +610,21 @@ export class CalendarService {
         throw new Error('Booking not found');
       }
 
-      // Check authorization
-      if (booking.userId.toString() !== userId && userId !== 'superadmin') {
+      // Check authorization - allow booking owner, superadmin, or stadium owner to reschedule
+      const isBookingOwner = booking.userId.toString() === userId;
+      const isSuperAdmin = userId === 'superadmin';
+      
+      // Check if user is stadium owner for this booking
+      let isStadiumOwner = false;
+      if (!isBookingOwner && !isSuperAdmin) {
+        // Get the stadium to check if the user is the owner
+        const stadium = await Stadium.findById(booking.stadiumId);
+        if (stadium && stadium.ownerId.toString() === userId) {
+          isStadiumOwner = true;
+        }
+      }
+      
+      if (!isBookingOwner && !isSuperAdmin && !isStadiumOwner) {
         throw new Error('Not authorized to reschedule this booking');
       }
 
@@ -631,6 +653,9 @@ export class CalendarService {
       booking.startTime = newStartTime;
       booking.endTime = newEndTime;
       
+      // Set status to completed when rescheduled
+      booking.status = 'completed';
+      
       // Recalculate duration
       const startMoment = moment(newStartTime, 'HH:mm');
       const endMoment = moment(newEndTime, 'HH:mm');
@@ -643,14 +668,16 @@ export class CalendarService {
         oldValues: {
           bookingDate: booking.bookingDate,
           startTime: booking.startTime,
-          endTime: booking.endTime
+          endTime: booking.endTime,
+          status: booking.status
         },
         newValues: {
           bookingDate: newDate,
           startTime: newStartTime,
-          endTime: newEndTime
+          endTime: newEndTime,
+          status: 'completed'
         },
-        notes: 'Booking rescheduled'
+        notes: 'Booking rescheduled and marked as completed'
       } as any);
 
       await booking.save();
