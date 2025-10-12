@@ -626,6 +626,53 @@ export class AuthController {
     }
   }
 
+  /**
+   * Upload profile image for current user
+   */
+  static async uploadProfileImage(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      
+      // Check if file was uploaded
+      if (!req.file) {
+        res.status(400).json({
+          success: false,
+          message: TranslationService.t('noFileUploaded')
+        });
+        return;
+      }
+
+      const user = await User.findById(userId);
+      if (!user) {
+        res.status(404).json({
+          success: false,
+          message: TranslationService.t('userNotFound')
+        });
+        return;
+      }
+
+      // Initialize profile if it doesn't exist
+      if (!user.profile) {
+        user.profile = {};
+      }
+
+      // Save the profile image path
+      user.profile.profileImage = `/uploads/profiles/${req.file.filename}`;
+      
+      await user.save();
+
+      res.json({
+        success: true,
+        message: TranslationService.t('success'),
+        data: {
+          profileImage: user.profile.profileImage
+        }
+      });
+    } catch (error: any) {
+      next(error);
+    }
+  }
+
   static async phoneLogin(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const errors = validationResult(req);
