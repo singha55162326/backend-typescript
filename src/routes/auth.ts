@@ -538,4 +538,21 @@ router.post('/me/profile-image',
   AuthController.uploadProfileImage
 );
 
+/**
+ * @swagger
+ * /api/auth/me/profile-image:
+ *   delete:
+ *     summary: Remove profile image for current user
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Profile image removed successfully
+ */
+router.delete('/me/profile-image', 
+  authenticateToken, 
+  AuthController.removeProfileImage
+);
+
 export default router;

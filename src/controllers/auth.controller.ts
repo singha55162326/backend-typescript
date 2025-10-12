@@ -612,6 +612,11 @@ export class AuthController {
             ...updates.profile.notificationPreferences
           };
         }
+        
+        // Handle profile image (if provided in the profile object)
+        if (updates.profile.profileImage !== undefined) {
+          user.profile.profileImage = updates.profile.profileImage;
+        }
       }
 
       await user.save();
@@ -666,6 +671,44 @@ export class AuthController {
         message: TranslationService.t('success'),
         data: {
           profileImage: user.profile.profileImage
+        }
+      });
+    } catch (error: any) {
+      next(error);
+    }
+  }
+
+  /**
+   * Remove profile image for current user
+   */
+  static async removeProfileImage(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+
+      const user = await User.findById(userId);
+      if (!user) {
+        res.status(404).json({
+          success: false,
+          message: TranslationService.t('userNotFound')
+        });
+        return;
+      }
+
+      // Initialize profile if it doesn't exist
+      if (!user.profile) {
+        user.profile = {};
+      }
+
+      // Remove the profile image path
+      user.profile.profileImage = undefined;
+      
+      await user.save();
+
+      res.json({
+        success: true,
+        message: TranslationService.t('success'),
+        data: {
+          profileImage: null
         }
       });
     } catch (error: any) {
