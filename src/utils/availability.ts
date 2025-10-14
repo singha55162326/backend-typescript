@@ -45,6 +45,7 @@ class AvailabilityService {
     endTime: string,
     excludeBookingId: string | null = null
   ): Promise<boolean> {
+    // Allow booking for future dates by removing the past date check
     const query: any = {
       fieldId,
       bookingDate: new Date(date),

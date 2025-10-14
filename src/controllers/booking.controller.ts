@@ -10,6 +10,7 @@ import { IPayment } from '../types/booking.types';
 import AvailabilityService from '../utils/availability';
 import { InvoiceService } from '../services/invoice.service';
 import { QRCodeGenerator } from '../utils/qrCodeGenerator';
+import { MembershipService, MembershipBookingParams } from '../services/membership.service';
 
 export class BookingController {
   /**
@@ -26,7 +27,13 @@ export class BookingController {
         return;
       }
 
-      const { stadiumId, fieldId, bookingDate, startTime, endTime, teamInfo, specialRequests } = req.body;
+      const { stadiumId, fieldId, bookingDate, startTime, endTime, teamInfo, specialRequests, bookingType } = req.body;
+
+      // Handle membership bookings differently
+      if (bookingType === 'membership') {
+        await BookingController.createMembershipBooking(req, res, next);
+        return;
+      }
 
       // Check if stadium and field exist
       const stadium = await Stadium.findById(stadiumId);
@@ -128,7 +135,7 @@ export class BookingController {
 
       // Create booking
       const booking = new Booking({
-        userId: req.user?.userId,
+        userId: new mongoose.Types.ObjectId(req.user?.userId),
         stadiumId,
         fieldId,
         bookingDate: new Date(bookingDate),
@@ -141,12 +148,13 @@ export class BookingController {
           currency: 'LAK',
           refereeCharges
         },
+        bookingType: bookingType || 'regular',
         teamInfo,
         specialRequests: specialRequests || [],
         assignedStaff,
         history: [{
           action: 'created',
-          changedBy: req.user?.userId,
+          changedBy: new mongoose.Types.ObjectId(req.user?.userId),
           newValues: { status: 'pending' },
           notes: 'Booking created'
         }]
@@ -172,6 +180,72 @@ export class BookingController {
   }
 
   /**
+   * Create a membership booking with recurring logic
+   */
+  static async createMembershipBooking(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        res.status(400).json({
+          success: false,
+          errors: errors.array()
+        });
+        return;
+      }
+
+      const { 
+        stadiumId, 
+        fieldId, 
+        startDate, 
+        endDate, 
+        dayOfWeek, 
+        startTime, 
+        endTime, 
+        teamInfo, 
+        specialRequests,
+        recurrencePattern,
+        totalOccurrences
+      } = req.body;
+
+      // Validate required fields for membership booking
+      if (!startDate || !dayOfWeek === undefined || !startTime || !endTime || !recurrencePattern) {
+        res.status(400).json({
+          success: false,
+          message: 'Missing required fields for membership booking'
+        });
+        return;
+      }
+
+      // Create membership booking parameters
+      const membershipParams: MembershipBookingParams = {
+        stadiumId,
+        fieldId,
+        startDate: new Date(startDate),
+        endDate: endDate ? new Date(endDate) : undefined,
+        dayOfWeek,
+        startTime,
+        endTime,
+        userId: req.user?.userId || '',
+        recurrencePattern,
+        totalOccurrences,
+        teamInfo,
+        specialRequests
+      };
+
+      // Create the membership bookings
+      const bookings = await MembershipService.createMembershipBookings(membershipParams);
+
+      res.status(201).json({
+        success: true,
+        message: `Membership bookings created successfully (${bookings.length} bookings)`,
+        data: bookings
+      });
+    } catch (error: any) {
+      next(error);
+    }
+  }
+
+  /**
    * Get current user's bookings
    */
   static async getUserBookings(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -186,7 +260,7 @@ export class BookingController {
       }
 
       const bookings = await Booking.find(query)
-        .populate('stadiumId', 'name address')
+        .populate('stadiumId', 'name address fields')
         .sort({ bookingDate: -1, startTime: -1 })
         .skip(skip)
         .limit(limit);
@@ -291,7 +365,6 @@ static async getAllBookings(req: Request, res: Response, next: NextFunction): Pr
     const bookings = await Booking.find(query)
       .populate('userId', 'name email phone')
       .populate('stadiumId', 'name address fields')
-      .populate('fieldId', 'name fieldType')
       .sort({ createdAt: -1, bookingDate: -1 })
       .skip(skip)
       .limit(limit);
@@ -845,15 +918,8 @@ if (
         return;
       }
 
-      // Check if date is in the past
-      const today = moment().startOf('day');
-      if (requestedDate.isBefore(today)) {
-        res.status(400).json({
-          success: false,
-          message: 'Cannot check availability for past dates'
-        });
-        return;
-      }
+      // Allow checking availability for future dates by removing the past date check
+      // Only check if date is valid
 
       // Find stadium and field
       const stadium = await Stadium.findById(stadiumId);
@@ -1272,6 +1338,86 @@ if (
             currency: ref.currency
           }))
         }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Delete a booking permanently from the database
+   */
+  static async deleteBooking(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { bookingId } = req.params;
+
+      // Validate booking ID
+      if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid booking ID format'
+        });
+        return;
+      }
+
+      // Find the booking
+      const booking = await Booking.findById(bookingId);
+      if (!booking) {
+        res.status(404).json({
+          success: false,
+          message: 'Booking not found'
+        });
+        return;
+      }
+
+      // Check authorization
+      const isOwner = booking.userId.toString() === req.user?.userId;
+      const isSuperAdmin = req.user?.role === 'superadmin';
+      const isStadiumOwner = req.user?.role === 'stadium_owner';
+
+      // Check if user owns the stadium for this booking
+      let isStadiumOwnerOfBooking = false;
+      if (!isOwner && !isSuperAdmin && !isStadiumOwner) {
+        const stadium = await Stadium.findById(booking.stadiumId);
+        if (stadium && stadium.ownerId.toString() === req.user?.userId) {
+          isStadiumOwnerOfBooking = true;
+        }
+      }
+
+      if (!isOwner && !isSuperAdmin && !isStadiumOwner && !isStadiumOwnerOfBooking) {
+        res.status(403).json({
+          success: false,
+          message: 'Not authorized to delete this booking'
+        });
+        return;
+      }
+
+      // Check if booking is in the past
+      const bookingDateTime = moment.tz(
+        `${booking.bookingDate.toISOString().split('T')[0]} ${booking.startTime}`,
+        'YYYY-MM-DD HH:mm',
+        'Asia/Vientiane'
+      );
+      const now = moment.tz('Asia/Vientiane');
+      
+      // Allow deletion of future bookings or by privileged users
+      const isFutureBooking = bookingDateTime.isAfter(now);
+      const isPrivilegedUser = isSuperAdmin || isStadiumOwner || isStadiumOwnerOfBooking;
+
+      if (!isFutureBooking && !isPrivilegedUser) {
+        res.status(400).json({
+          success: false,
+          message: 'Cannot delete past bookings. Only future bookings can be deleted.'
+        });
+        return;
+      }
+
+      // Delete the booking permanently
+      await Booking.findByIdAndDelete(bookingId);
+
+      res.json({
+        success: true,
+        message: 'Booking deleted successfully'
       });
     } catch (error) {
       next(error);
