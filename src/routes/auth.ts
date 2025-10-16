@@ -3,6 +3,7 @@ import { body, param, query } from 'express-validator';
 import { AuthController } from '../controllers/auth.controller';
 import { authenticateToken, authorizeRoles } from '../middleware/auth';
 import { requireAdmin, requireStadiumOwnerOrAdmin } from '../middleware/rbac';
+import { uploadProfileImage } from '../middleware/uploadProfileImage';
 
 const router = Router();
 
@@ -509,5 +510,49 @@ router.post('/customer/login', [
  *         description: Profile updated successfully
  */
 router.put('/me', authenticateToken, AuthController.updateUserProfile);
+
+/**
+ * @swagger
+ * /api/auth/me/profile-image:
+ *   post:
+ *     summary: Upload profile image for current user
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               profileImage:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Profile image uploaded successfully
+ */
+router.post('/me/profile-image', 
+  authenticateToken, 
+  uploadProfileImage.single('profileImage'),
+  AuthController.uploadProfileImage
+);
+
+/**
+ * @swagger
+ * /api/auth/me/profile-image:
+ *   delete:
+ *     summary: Remove profile image for current user
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Profile image removed successfully
+ */
+router.delete('/me/profile-image', 
+  authenticateToken, 
+  AuthController.removeProfileImage
+);
 
 export default router;

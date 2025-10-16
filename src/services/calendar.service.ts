@@ -24,6 +24,16 @@ export interface CalendarEvent {
     customerName?: string;
     fieldName?: string;
     stadiumName?: string;
+    membershipDetails?: {
+      membershipStartDate: string;
+      membershipEndDate?: string;
+      recurrencePattern: string;
+      recurrenceDayOfWeek: number;
+      nextBookingDate?: string;
+      totalOccurrences?: number;
+      completedOccurrences?: number;
+      isActive: boolean;
+    };
   };
 }
 
@@ -142,7 +152,7 @@ export class CalendarService {
         throw new Error('Invalid user ID format');
       }
       
-      // Find bookings for the user within the date range
+      // Find bookings for the user within the date range (including future dates)
       const bookings = await Booking.find({
         userId: new mongoose.Types.ObjectId(userId),
         bookingDate: {
@@ -182,8 +192,18 @@ export class CalendarService {
           fieldName = this.getFieldName(stadium, (booking as any).fieldId.toString());
         }
         
-        const startDateTime = new Date(`${(booking as any).bookingDate.toISOString().split('T')[0]}T${(booking as any).startTime}`);
-        const endDateTime = new Date(`${(booking as any).bookingDate.toISOString().split('T')[0]}T${(booking as any).endTime}`);
+        // Create date objects using proper timezone handling
+        const bookingDateStr = (booking as any).bookingDate.toISOString().split('T')[0];
+        const startDateTimeStr = `${bookingDateStr}T${(booking as any).startTime}:00`;
+        const endDateTimeStr = `${bookingDateStr}T${(booking as any).endTime}:00`;
+        
+        const startDateTime = new Date(startDateTimeStr);
+        const endDateTime = new Date(endDateTimeStr);
+        
+        // Handle case where end time is next day (e.g., 22:00 to 02:00)
+        if (endDateTime < startDateTime) {
+          endDateTime.setDate(endDateTime.getDate() + 1);
+        }
         
         const colors = this.getStatusColors((booking as any).status);
         
@@ -204,10 +224,26 @@ export class CalendarService {
           extendedProps: {
             bookingType: (booking as any).bookingType,
             totalPrice: (booking as any).pricing?.totalAmount,
-            currency: (booking as any).pricing?.currency,
+            currency: (booking as any).pricing?.currency || 'LAK', // FIXED CURRENCY ISSUE
             customerName: ((booking as any).userId as any)?.name || 'Unknown User',
             fieldName: fieldName,
-            stadiumName: stadium?.name || 'Unknown Stadium'
+            stadiumName: stadium?.name || 'Unknown Stadium',
+            // Add membership details for membership bookings
+            ...(booking.bookingType === 'membership' && booking.membershipDetails && {
+              membershipDetails: {
+                membershipStartDate: booking.membershipDetails.membershipStartDate ? 
+                  new Date(booking.membershipDetails.membershipStartDate).toISOString() : '',
+                membershipEndDate: booking.membershipDetails.membershipEndDate ? 
+                  new Date(booking.membershipDetails.membershipEndDate).toISOString() : undefined,
+                recurrencePattern: booking.membershipDetails.recurrencePattern,
+                recurrenceDayOfWeek: booking.membershipDetails.recurrenceDayOfWeek,
+                nextBookingDate: booking.membershipDetails.nextBookingDate ? 
+                  new Date(booking.membershipDetails.nextBookingDate).toISOString() : undefined,
+                totalOccurrences: booking.membershipDetails.totalOccurrences,
+                completedOccurrences: booking.membershipDetails.completedOccurrences,
+                isActive: booking.membershipDetails.isActive
+              }
+            })
           }
         });
       }
@@ -243,7 +279,7 @@ export class CalendarService {
         return [];
       }
       
-      // Find bookings for these stadiums within the date range
+      // Find bookings for these stadiums within the date range (including future dates)
       const bookings = await Booking.find({
         stadiumId: { $in: stadiumIds },
         bookingDate: {
@@ -270,8 +306,18 @@ export class CalendarService {
           fieldName = this.getFieldName(stadium, booking.fieldId.toString());
         }
         
-        const startDateTime = new Date(`${booking.bookingDate.toISOString().split('T')[0]}T${booking.startTime}`);
-        const endDateTime = new Date(`${booking.bookingDate.toISOString().split('T')[0]}T${booking.endTime}`);
+        // Create date objects using proper timezone handling
+        const bookingDateStr = booking.bookingDate.toISOString().split('T')[0];
+        const startDateTimeStr = `${bookingDateStr}T${booking.startTime}:00`;
+        const endDateTimeStr = `${bookingDateStr}T${booking.endTime}:00`;
+        
+        const startDateTime = new Date(startDateTimeStr);
+        const endDateTime = new Date(endDateTimeStr);
+        
+        // Handle case where end time is next day (e.g., 22:00 to 02:00)
+        if (endDateTime < startDateTime) {
+          endDateTime.setDate(endDateTime.getDate() + 1);
+        }
         
         const colors = this.getStatusColors(booking.status);
         
@@ -292,10 +338,26 @@ export class CalendarService {
           extendedProps: {
             bookingType: booking.bookingType,
             totalPrice: booking.pricing?.totalAmount,
-            currency: booking.pricing?.currency,
+            currency: booking.pricing?.currency || 'LAK', // FIXED CURRENCY ISSUE
             customerName: (booking.userId as any)?.name || 'Unknown User',
             fieldName: fieldName,
-            stadiumName: stadium?.name || 'Unknown Stadium'
+            stadiumName: stadium?.name || 'Unknown Stadium',
+            // Add membership details for membership bookings
+            ...(booking.bookingType === 'membership' && booking.membershipDetails && {
+              membershipDetails: {
+                membershipStartDate: booking.membershipDetails.membershipStartDate ? 
+                  new Date(booking.membershipDetails.membershipStartDate).toISOString() : '',
+                membershipEndDate: booking.membershipDetails.membershipEndDate ? 
+                  new Date(booking.membershipDetails.membershipEndDate).toISOString() : undefined,
+                recurrencePattern: booking.membershipDetails.recurrencePattern,
+                recurrenceDayOfWeek: booking.membershipDetails.recurrenceDayOfWeek,
+                nextBookingDate: booking.membershipDetails.nextBookingDate ? 
+                  new Date(booking.membershipDetails.nextBookingDate).toISOString() : undefined,
+                totalOccurrences: booking.membershipDetails.totalOccurrences,
+                completedOccurrences: booking.membershipDetails.completedOccurrences,
+                isActive: booking.membershipDetails.isActive
+              }
+            })
           }
         });
       }
@@ -332,7 +394,7 @@ export class CalendarService {
     
     console.log('Database query:', query);
     
-    // Find all bookings within the date range with populated stadium and user data
+    // Find all bookings within the date range with populated stadium and user data (including future dates)
     const bookings = await Booking.find(query)
       .populate('stadiumId', 'name fields')
       .populate('userId', 'name email')
@@ -377,14 +439,20 @@ export class CalendarService {
           }
         }
         
-        // Create date objects for start and end times
-        const startDateTime = new Date(booking.bookingDate);
-        const [startHours, startMinutes] = booking.startTime.split(':').map(Number);
-        startDateTime.setHours(startHours, startMinutes, 0, 0);
-
-        const endDateTime = new Date(booking.bookingDate);
-        const [endHours, endMinutes] = booking.endTime.split(':').map(Number);
-        endDateTime.setHours(endHours, endMinutes, 0, 0);
+        // Create date objects for start and end times - FIXED TIMEZONE ISSUE
+        // Create a new date based on bookingDate but with proper time handling
+        const bookingDateStr = booking.bookingDate.toISOString().split('T')[0];
+        const startDateTimeStr = `${bookingDateStr}T${booking.startTime}:00`;
+        const endDateTimeStr = `${bookingDateStr}T${booking.endTime}:00`;
+        
+        // Parse dates properly to handle timezone correctly
+        const startDateTime = new Date(startDateTimeStr);
+        const endDateTime = new Date(endDateTimeStr);
+        
+        // Handle case where end time is next day (e.g., 22:00 to 02:00)
+        if (endDateTime < startDateTime) {
+          endDateTime.setDate(endDateTime.getDate() + 1);
+        }
 
         // Get colors based on status
         const colors = this.getStatusColors(booking.status);
@@ -406,10 +474,26 @@ export class CalendarService {
           extendedProps: {
             bookingType: booking.bookingType,
             totalPrice: booking.pricing?.totalAmount,
-            currency: booking.pricing?.currency || 'USD',
+            currency: booking.pricing?.currency || 'LAK', // FIXED CURRENCY ISSUE
             customerName: `${(booking.userId as any)?.name || 'Unknown User'}`,
             fieldName: fieldName,
-            stadiumName: stadiumName
+            stadiumName: stadiumName,
+            // Add membership details for membership bookings
+            ...(booking.bookingType === 'membership' && booking.membershipDetails && {
+              membershipDetails: {
+                membershipStartDate: booking.membershipDetails.membershipStartDate ? 
+                  new Date(booking.membershipDetails.membershipStartDate).toISOString() : '',
+                membershipEndDate: booking.membershipDetails.membershipEndDate ? 
+                  new Date(booking.membershipDetails.membershipEndDate).toISOString() : undefined,
+                recurrencePattern: booking.membershipDetails.recurrencePattern,
+                recurrenceDayOfWeek: booking.membershipDetails.recurrenceDayOfWeek,
+                nextBookingDate: booking.membershipDetails.nextBookingDate ? 
+                  new Date(booking.membershipDetails.nextBookingDate).toISOString() : undefined,
+                totalOccurrences: booking.membershipDetails.totalOccurrences,
+                completedOccurrences: booking.membershipDetails.completedOccurrences,
+                isActive: booking.membershipDetails.isActive
+              }
+            })
           }
         });
       } catch (bookingError) {
@@ -447,7 +531,7 @@ export class CalendarService {
         throw new Error('Stadium not found');
       }
 
-      // Find bookings for the stadium within the date range
+      // Find bookings for the stadium within the date range (including future dates)
       const bookings = await Booking.find({
         stadiumId: new mongoose.Types.ObjectId(stadiumId),
         bookingDate: {
@@ -468,8 +552,18 @@ export class CalendarService {
           fieldName = this.getFieldName(stadium, booking.fieldId.toString());
         }
         
-        const startDateTime = new Date(`${booking.bookingDate.toISOString().split('T')[0]}T${booking.startTime}`);
-        const endDateTime = new Date(`${booking.bookingDate.toISOString().split('T')[0]}T${booking.endTime}`);
+        // Create date objects using proper timezone handling
+        const bookingDateStr = booking.bookingDate.toISOString().split('T')[0];
+        const startDateTimeStr = `${bookingDateStr}T${booking.startTime}:00`;
+        const endDateTimeStr = `${bookingDateStr}T${booking.endTime}:00`;
+        
+        const startDateTime = new Date(startDateTimeStr);
+        const endDateTime = new Date(endDateTimeStr);
+        
+        // Handle case where end time is next day (e.g., 22:00 to 02:00)
+        if (endDateTime < startDateTime) {
+          endDateTime.setDate(endDateTime.getDate() + 1);
+        }
         
         const colors = this.getStatusColors(booking.status);
         
@@ -490,10 +584,26 @@ export class CalendarService {
           extendedProps: {
             bookingType: booking.bookingType,
             totalPrice: booking.pricing?.totalAmount,
-            currency: booking.pricing?.currency,
+            currency: booking.pricing?.currency || 'LAK', // FIXED CURRENCY ISSUE
             customerName: booking.userId ? `${(booking.userId as any)?.name || 'Unknown User'}` : 'Unknown User',
             fieldName: fieldName,
-            stadiumName: stadium.name
+            stadiumName: stadium.name,
+            // Add membership details for membership bookings
+            ...(booking.bookingType === 'membership' && booking.membershipDetails && {
+              membershipDetails: {
+                membershipStartDate: booking.membershipDetails.membershipStartDate ? 
+                  new Date(booking.membershipDetails.membershipStartDate).toISOString() : '',
+                membershipEndDate: booking.membershipDetails.membershipEndDate ? 
+                  new Date(booking.membershipDetails.membershipEndDate).toISOString() : undefined,
+                recurrencePattern: booking.membershipDetails.recurrencePattern,
+                recurrenceDayOfWeek: booking.membershipDetails.recurrenceDayOfWeek,
+                nextBookingDate: booking.membershipDetails.nextBookingDate ? 
+                  new Date(booking.membershipDetails.nextBookingDate).toISOString() : undefined,
+                totalOccurrences: booking.membershipDetails.totalOccurrences,
+                completedOccurrences: booking.membershipDetails.completedOccurrences,
+                isActive: booking.membershipDetails.isActive
+              }
+            })
           }
         });
       }
@@ -601,8 +711,21 @@ export class CalendarService {
         throw new Error('Booking not found');
       }
 
-      // Check authorization
-      if (booking.userId.toString() !== userId && userId !== 'superadmin') {
+      // Check authorization - allow booking owner, superadmin, or stadium owner to reschedule
+      const isBookingOwner = booking.userId.toString() === userId;
+      const isSuperAdmin = userId === 'superadmin';
+      
+      // Check if user is stadium owner for this booking
+      let isStadiumOwner = false;
+      if (!isBookingOwner && !isSuperAdmin) {
+        // Get the stadium to check if the user is the owner
+        const stadium = await Stadium.findById(booking.stadiumId);
+        if (stadium && stadium.ownerId.toString() === userId) {
+          isStadiumOwner = true;
+        }
+      }
+      
+      if (!isBookingOwner && !isSuperAdmin && !isStadiumOwner) {
         throw new Error('Not authorized to reschedule this booking');
       }
 
@@ -631,6 +754,9 @@ export class CalendarService {
       booking.startTime = newStartTime;
       booking.endTime = newEndTime;
       
+      // Set status to completed when rescheduled
+      booking.status = 'completed';
+      
       // Recalculate duration
       const startMoment = moment(newStartTime, 'HH:mm');
       const endMoment = moment(newEndTime, 'HH:mm');
@@ -643,14 +769,16 @@ export class CalendarService {
         oldValues: {
           bookingDate: booking.bookingDate,
           startTime: booking.startTime,
-          endTime: booking.endTime
+          endTime: booking.endTime,
+          status: booking.status
         },
         newValues: {
           bookingDate: newDate,
           startTime: newStartTime,
-          endTime: newEndTime
+          endTime: newEndTime,
+          status: 'completed'
         },
-        notes: 'Booking rescheduled'
+        notes: 'Booking rescheduled and marked as completed'
       } as any);
 
       await booking.save();

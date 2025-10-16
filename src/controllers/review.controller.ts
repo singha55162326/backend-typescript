@@ -4,6 +4,7 @@ import Review from '../models/Review';
 import Booking from '../models/Booking';
 import Stadium from '../models/Stadium';
 
+
 import mongoose from 'mongoose';
 
 export class ReviewController {
@@ -108,6 +109,66 @@ export class ReviewController {
         stadiumId,
         status
       });
+
+      res.json({
+        success: true,
+        data: reviews,
+        pagination: {
+          page: parseInt(page as string),
+          limit: parseInt(limit as string),
+          total,
+          pages: Math.ceil(total / parseInt(limit as string))
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Get all reviews (for superadmin) or reviews for owned stadiums (for stadium_owner)
+   */
+  static async getAllReviews(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      const userRole = req.user?.role;
+      const { page = 1, limit = 10, status } = req.query;
+
+      // Check if user is authorized
+      if (!userId || !userRole) {
+        res.status(401).json({
+          success: false,
+          message: 'Authentication required'
+        });
+        return;
+      }
+
+      const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
+
+      // Build query based on user role
+      let query: any = {};
+      
+      // If status is provided, add to query
+      if (status && status !== 'all') {
+        query.status = status;
+      }
+
+      // If user is a stadium owner, only show reviews for their stadiums
+      if (userRole === 'stadium_owner') {
+        const stadiums = await Stadium.find({ ownerId: userId }, '_id');
+        const stadiumIds = stadiums.map(stadium => stadium._id);
+        query.stadiumId = { $in: stadiumIds };
+      }
+      // Superadmin can see all reviews, so no additional filtering needed
+
+      const reviews = await Review.find(query)
+        .populate('userId', 'firstName lastName')
+        .populate('stadiumId', 'name')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit as string));
+
+      const total = await Review.countDocuments(query);
 
       res.json({
         success: true,

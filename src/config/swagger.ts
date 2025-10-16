@@ -453,7 +453,7 @@ const options: swaggerJsdoc.Options = {
             },
             bookingType: {
               type: 'string',
-              enum: ['regular', 'tournament', 'training', 'event'],
+              enum: ['regular', 'tournament', 'training', 'event', 'membership'],
               default: 'regular',
             },
             teamInfo: { $ref: '#/components/schemas/TeamInfo' },
@@ -475,9 +475,44 @@ const options: swaggerJsdoc.Options = {
               type: 'array',
               items: { $ref: '#/components/schemas/HistoryItem' },
             },
+            // ✅ Added membershipDetails property
+            membershipDetails: {
+              type: 'object',
+              properties: {
+                membershipStartDate: { type: 'string', format: 'date-time' },
+                membershipEndDate: { type: 'string', format: 'date-time' },
+                recurrencePattern: {
+                  type: 'string',
+                  enum: ['weekly', 'biweekly', 'monthly']
+                },
+                recurrenceDayOfWeek: { type: 'integer', minimum: 0, maximum: 6 },
+                nextBookingDate: { type: 'string', format: 'date-time' },
+                totalOccurrences: { type: 'integer' },
+                completedOccurrences: { type: 'integer' },
+                isActive: { type: 'boolean' }
+              }
+            },
             createdAt: { type: 'string', format: 'date-time' },
             updatedAt: { type: 'string', format: 'date-time' },
           },
+        },
+        
+        // ✅ Added MembershipDetails schema
+        MembershipDetails: {
+          type: 'object',
+          properties: {
+            membershipStartDate: { type: 'string', format: 'date-time' },
+            membershipEndDate: { type: 'string', format: 'date-time' },
+            recurrencePattern: {
+              type: 'string',
+              enum: ['weekly', 'biweekly', 'monthly']
+            },
+            recurrenceDayOfWeek: { type: 'integer', minimum: 0, maximum: 6 },
+            nextBookingDate: { type: 'string', format: 'date-time' },
+            totalOccurrences: { type: 'integer' },
+            completedOccurrences: { type: 'integer' },
+            isActive: { type: 'boolean' }
+          }
         },
       },
     },
@@ -829,12 +864,49 @@ const options: swaggerJsdoc.Options = {
         post: {
           tags: ['Bookings'],
           summary: 'Create a new booking',
+          description: 'Create a new booking. For regular bookings, provide bookingDate, startTime, and endTime. For membership bookings, provide startDate, dayOfWeek, startTime, endTime, and recurrencePattern. Membership bookings will create a series of recurring bookings based on the specified pattern.',
           security: [{ bearerAuth: [] }],
           requestBody: {
             required: true,
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/Booking' },
+                schema: { 
+                  type: 'object',
+                  oneOf: [
+                    {
+                      title: 'Regular Booking',
+                      required: ['stadiumId', 'fieldId', 'bookingDate', 'startTime', 'endTime'],
+                      properties: {
+                        stadiumId: { type: 'string', format: 'ObjectId' },
+                        fieldId: { type: 'string', format: 'ObjectId' },
+                        bookingDate: { type: 'string', format: 'date' },
+                        startTime: { type: 'string', pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$' },
+                        endTime: { type: 'string', pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$' },
+                        teamInfo: { $ref: '#/components/schemas/TeamInfo' },
+                        specialRequests: { type: 'array', items: { type: 'string' } },
+                        bookingType: { type: 'string', enum: ['regular', 'tournament', 'training', 'event'] }
+                      }
+                    },
+                    {
+                      title: 'Membership Booking',
+                      required: ['stadiumId', 'fieldId', 'startDate', 'dayOfWeek', 'startTime', 'endTime', 'recurrencePattern'],
+                      properties: {
+                        stadiumId: { type: 'string', format: 'ObjectId' },
+                        fieldId: { type: 'string', format: 'ObjectId' },
+                        startDate: { type: 'string', format: 'date' },
+                        endDate: { type: 'string', format: 'date' },
+                        dayOfWeek: { type: 'integer', minimum: 0, maximum: 6 },
+                        startTime: { type: 'string', pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$' },
+                        endTime: { type: 'string', pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$' },
+                        recurrencePattern: { type: 'string', enum: ['weekly', 'biweekly', 'monthly'] },
+                        totalOccurrences: { type: 'integer', minimum: 1 },
+                        teamInfo: { $ref: '#/components/schemas/TeamInfo' },
+                        specialRequests: { type: 'array', items: { type: 'string' } },
+                        bookingType: { type: 'string', enum: ['membership'] }
+                      }
+                    }
+                  ]
+                },
                 examples: {
                   regularBooking: {
                     value: {
@@ -847,6 +919,21 @@ const options: swaggerJsdoc.Options = {
                       specialRequests: ['Extra balls'],
                     },
                   },
+                  membershipBooking: {
+                    value: {
+                      stadiumId: '64a1b2c3d4e5f6789012345',
+                      fieldId: '64a1b2c3d4e5f6789012346',
+                      startDate: '2025-12-01',
+                      endDate: '2026-06-01',
+                      dayOfWeek: 3, // Wednesday
+                      startTime: '18:00',
+                      endTime: '20:00',
+                      recurrencePattern: 'weekly',
+                      totalOccurrences: 26,
+                      teamInfo: { teamName: 'Vientiane FC', numberOfPlayers: 12 },
+                      bookingType: 'membership'
+                    }
+                  }
                 },
               },
             },

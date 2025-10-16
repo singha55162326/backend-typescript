@@ -34,6 +34,17 @@ interface IHistoryItem {
   timestamp: Date;
 }
 
+interface IMembershipDetails {
+  membershipStartDate: Date;
+  membershipEndDate?: Date;
+  recurrencePattern: 'weekly' | 'biweekly' | 'monthly';
+  recurrenceDayOfWeek: number; // 0 = Sunday, 1 = Monday, etc.
+  nextBookingDate?: Date;
+  totalOccurrences?: number;
+  completedOccurrences?: number;
+  isActive: boolean;
+}
+
 interface IPricing {
   baseRate: number;
   totalAmount: number;
@@ -55,13 +66,14 @@ export interface IBooking extends Document {
   pricing: IPricing;
   status: 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'no_show';
   paymentStatus: 'pending' | 'paid' | 'failed' | 'refunded';
-  bookingType: 'regular' | 'tournament' | 'training' | 'event';
+  bookingType: 'regular' | 'tournament' | 'training' | 'event' | 'membership';
   teamInfo?: ITeamInfo;
   notes?: string;
   specialRequests?: string[];
   assignedStaff?: IAssignedStaff[];
   payments?: import('../types/booking.types').IPayment[];
   cancellation?: ICancellation;
+  membershipDetails?: IMembershipDetails;
   history: IHistoryItem[];
 }
 
@@ -208,7 +220,7 @@ const bookingSchema = new Schema<IBooking>({
   },
   bookingType: {
     type: String,
-    enum: ['regular', 'tournament', 'training', 'event'],
+    enum: ['regular', 'tournament', 'training', 'event', 'membership'],
     default: 'regular'
   },
   teamInfo: teamInfoSchema,
@@ -217,6 +229,22 @@ const bookingSchema = new Schema<IBooking>({
   assignedStaff: [assignedStaffSchema],
   payments: [paymentSchema],
   cancellation: cancellationSchema,
+  membershipDetails: {
+    membershipStartDate: Date,
+    membershipEndDate: Date,
+    recurrencePattern: {
+      type: String,
+      enum: ['weekly', 'biweekly', 'monthly']
+    },
+    recurrenceDayOfWeek: Number,
+    nextBookingDate: Date,
+    totalOccurrences: Number,
+    completedOccurrences: Number,
+    isActive: {
+      type: Boolean,
+      default: true
+    }
+  },
   history: [historyItemSchema]
 }, {
   timestamps: true

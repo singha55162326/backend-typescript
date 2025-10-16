@@ -152,7 +152,33 @@ const router = Router();
  *         timestamp:
  *           type: string
  *           format: date-time
- *     
+     
+ *     MembershipDetails:
+ *       type: object
+ *       properties:
+ *         membershipStartDate:
+ *           type: string
+ *           format: date-time
+ *         membershipEndDate:
+ *           type: string
+ *           format: date-time
+ *         recurrencePattern:
+ *           type: string
+ *           enum: [weekly, biweekly, monthly]
+ *         recurrenceDayOfWeek:
+ *           type: integer
+ *           minimum: 0
+ *           maximum: 6
+ *         nextBookingDate:
+ *           type: string
+ *           format: date-time
+ *         totalOccurrences:
+ *           type: integer
+ *         completedOccurrences:
+ *           type: integer
+ *         isActive:
+ *           type: boolean
+     
  *     InvoiceItem:
  *       type: object
  *       properties:
@@ -269,7 +295,7 @@ const router = Router();
  *           enum: [pending, paid, failed, refunded]
  *         bookingType:
  *           type: string
- *           enum: [regular, tournament, training, event]
+ *           enum: [regular, tournament, training, event, membership]
  *         teamInfo:
  *           $ref: '#/components/schemas/TeamInfo'
  *         notes:
@@ -292,6 +318,9 @@ const router = Router();
  *           type: array
  *           items:
  *             $ref: '#/components/schemas/HistoryItem'
+ *         // ✅ Added membershipDetails property
+ *         membershipDetails:
+ *           $ref: '#/components/schemas/MembershipDetails'
  *         createdAt:
  *           type: string
  *           format: date-time
@@ -305,6 +334,10 @@ const router = Router();
  * /api/bookings:
  *   post:
  *     summary: Create a new booking
+ *     description: |
+ *       Create a new booking. For regular bookings, provide bookingDate, startTime, and endTime.
+ *       For membership bookings, provide startDate, dayOfWeek, startTime, endTime, and recurrencePattern.
+ *       Membership bookings will create a series of recurring bookings based on the specified pattern.
  *     tags: [Bookings]
  *     security:
  *       - bearerAuth: []
@@ -317,33 +350,77 @@ const router = Router();
  *             required:
  *               - stadiumId
  *               - fieldId
- *               - bookingDate
- *               - startTime
- *               - endTime
+ *             oneOf:
+ *               - required:
+ *                   - stadiumId
+ *                   - fieldId
+ *                   - bookingDate
+ *                   - startTime
+ *                   - endTime
+ *               - required:
+ *                   - stadiumId
+ *                   - fieldId
+ *                   - startDate
+ *                   - dayOfWeek
+ *                   - startTime
+ *                   - endTime
+ *                   - recurrencePattern
  *             properties:
  *               stadiumId:
  *                 type: string
  *                 format: ObjectId
+ *                 description: ID of the stadium
  *               fieldId:
  *                 type: string
  *                 format: ObjectId
+ *                 description: ID of the field
  *               bookingDate:
  *                 type: string
  *                 format: date
+ *                 description: Date for regular booking (YYYY-MM-DD)
  *               startTime:
  *                 type: string
  *                 pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'
+ *                 description: Start time in 24-hour format (HH:mm)
  *               endTime:
  *                 type: string
- *                 pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]
+ *                 pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'
+ *                 description: End time in 24-hour format (HH:mm)
+ *               startDate:
+ *                 type: string
+ *                 format: date
+ *                 description: Start date for membership booking (YYYY-MM-DD)
+ *               endDate:
+ *                 type: string
+ *                 format: date
+ *                 description: Optional end date for membership booking (YYYY-MM-DD)
+ *               dayOfWeek:
+ *                 type: integer
+ *                 minimum: 0
+ *                 maximum: 6
+ *                 description: Day of week for membership booking (0=Sunday, 1=Monday, ..., 6=Saturday)
+ *               recurrencePattern:
+ *                 type: string
+ *                 enum: [weekly, biweekly, monthly]
+ *                 description: Recurrence pattern for membership booking
+ *               totalOccurrences:
+ *                 type: integer
+ *                 minimum: 1
+ *                 description: Optional total number of occurrences for membership booking
  *               teamInfo:
  *                 $ref: '#/components/schemas/TeamInfo'
  *               specialRequests:
  *                 type: array
  *                 items:
  *                   type: string
+ *                 description: Special requests for the booking
  *               needsReferee:
  *                 type: boolean
+ *                 description: Whether a referee is needed for the booking
+ *               bookingType:
+ *                 type: string
+ *                 enum: [regular, tournament, training, event, membership]
+ *                 description: Type of booking
  *     responses:
  *       201:
  *         description: Booking created successfully
@@ -371,6 +448,8 @@ router.post('/', [
   body('fieldId').isMongoId(),
   body('bookingDate')
     .custom((value) => {
+      // Skip validation if this is a membership booking
+      if (!value) return true;
       const formats = ['YYYY-MM-DD', 'YYYY-M-D', 'YYYY/MM/DD', 'YYYY/M/D'];
       const moment = require('moment');
       const date = moment(value, formats, true);
@@ -379,8 +458,49 @@ router.post('/', [
       }
       return true;
     }),
+  body('startDate')
+    .custom((value, { req }) => {
+      // Only validate start date for membership bookings
+      if (req.body.bookingType !== 'membership') return true;
+      if (!value) {
+        throw new Error('Start date is required for membership bookings');
+      }
+      const formats = ['YYYY-MM-DD', 'YYYY-M-D', 'YYYY/MM/DD', 'YYYY/M/D'];
+      const moment = require('moment');
+      const date = moment(value, formats, true);
+      if (!date.isValid()) {
+        throw new Error('Invalid start date format');
+      }
+      return true;
+    }),
+  body('dayOfWeek')
+    .custom((value, { req }) => {
+      // Only validate day of week for membership bookings
+      if (req.body.bookingType !== 'membership') return true;
+      if (value === undefined || value === null) {
+        throw new Error('Day of week is required for membership bookings');
+      }
+      const day = parseInt(value);
+      if (isNaN(day) || day < 0 || day > 6) {
+        throw new Error('Day of week must be between 0 (Sunday) and 6 (Saturday)');
+      }
+      return true;
+    }),
   body('startTime').matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),
   body('endTime').matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),
+  body('recurrencePattern')
+    .custom((value, { req }) => {
+      // Only validate recurrence pattern for membership bookings
+      if (req.body.bookingType !== 'membership') return true;
+      if (!value) {
+        throw new Error('Recurrence pattern is required for membership bookings');
+      }
+      const validPatterns = ['weekly', 'biweekly', 'monthly'];
+      if (!validPatterns.includes(value)) {
+        throw new Error('Invalid recurrence pattern');
+      }
+      return true;
+    }),
   body('teamInfo.teamName').optional().trim()
 ], BookingController.createBooking);
 
@@ -610,14 +730,9 @@ router.get('/:bookingId', authenticateToken, BookingController.getBookingById);
  *                 message:
  *                   type: string
  *                 data:
- *                   type: object
- *                   properties:
- *                     booking:
- *                       $ref: '#/components/schemas/Booking'
- *                     refundAmount:
- *                       type: number
+ *                   $ref: '#/components/schemas/Booking'
  *       400:
- *         description: Cancellation not allowed (too late)
+ *         description: Booking cannot be cancelled (time restriction)
  *       403:
  *         description: Not authorized to cancel this booking
  *       404:
@@ -629,6 +744,46 @@ router.put('/:bookingId/cancel', [
   authenticateToken,
   body('reason').optional().trim()
 ], BookingController.cancelBooking);
+
+/**
+ * @swagger
+ * /api/bookings/{bookingId}:
+ *   delete:
+ *     summary: Delete a booking permanently
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: bookingId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Booking ID
+ *     responses:
+ *       200:
+ *         description: Booking deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: Cannot delete past bookings
+ *       403:
+ *         description: Not authorized to delete this booking
+ *       404:
+ *         description: Booking not found
+ *       500:
+ *         description: Failed to delete booking
+ */
+router.delete('/:bookingId', [
+  authenticateToken
+], BookingController.deleteBooking);
 
 /**
  * @swagger
