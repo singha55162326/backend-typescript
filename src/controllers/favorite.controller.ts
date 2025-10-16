@@ -21,7 +21,7 @@ export class FavoriteController {
 
       const existingFavorite = await Favorite.findOne({ userId, stadiumId });
       if (existingFavorite) {
-        res.status(400).json({ success: false, message: "Already favorited" });
+        res.status(400).json({ success: false, message: "ທ່ານໄດ້ບັນທຶກເດີ່ນນີ້ໄວ້ແລ້ວ" });
         return;
       }
 
