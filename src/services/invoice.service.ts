@@ -35,6 +35,8 @@ export interface IInvoiceData {
     phone: string;
     ownerId: string;
     ownerName?: string; // Keep this optional
+    accountNumber?: string;
+    accountNumberImage?: string;
   };
   field?: { // Add optional field information
     fieldId: string;
@@ -78,61 +80,50 @@ export class InvoiceService {
     } | undefined = undefined;
     let fieldName = '';
     
-    try {
-      if (stadium.fields && Array.isArray(stadium.fields) && booking.fieldId) {
-        // Convert booking.fieldId to string for comparison
-        const bookingFieldIdStr = booking.fieldId.toString();
-        
-        // Find the field in the stadium's fields array
-        const field = stadium.fields.find((f: any) => {
-          // Check multiple possible ways the _id might be stored
-          if (f._id) {
-            // If _id is an ObjectId, convert to string
-            if (typeof f._id === 'object' && f._id.toString) {
-              return f._id.toString() === bookingFieldIdStr;
-            }
-            // If _id is already a string
-            if (typeof f._id === 'string') {
-              return f._id === bookingFieldIdStr;
-            }
+    // Optimized field information extraction
+    if (stadium.fields && Array.isArray(stadium.fields) && booking.fieldId) {
+      // Convert booking.fieldId to string for comparison
+      const bookingFieldIdStr = booking.fieldId.toString();
+      
+      // Find the field in the stadium's fields array
+      const field = stadium.fields.find((f: any) => {
+        // Check if _id exists and matches
+        if (f._id) {
+          // Handle ObjectId comparison
+          if (f._id instanceof mongoose.Types.ObjectId) {
+            return f._id.toString() === bookingFieldIdStr;
           }
-          return false;
-        });
-        
-        if (field) {
-          fieldInfo = {
-            fieldId: bookingFieldIdStr,
-            name: field.name || 'Unknown Field',
-            fieldType: field.fieldType || 'Unknown Type'
-          };
-          fieldName = ` - ${field.name}`;
-        } else if (booking.fieldId && typeof booking.fieldId === 'object' && '_id' in booking.fieldId) {
-          // Handle case where fieldId is an object with _id but no name
-          const fieldObj = booking.fieldId as any;
-          fieldInfo = {
-            fieldId: fieldObj._id?.toString() || bookingFieldIdStr,
-            name: fieldObj.name || `Field ID: ${bookingFieldIdStr.substring(0, 8)}`,
-            fieldType: fieldObj.fieldType || 'Unknown Type'
-          };
-          fieldName = ` - ${fieldInfo.name}`;
-        } else if (typeof booking.fieldId === 'string') {
-          // If fieldId is just a string, try to find it in stadium fields
-          const field = stadium.fields.find((f: any) => {
-            return f._id && f._id.toString() === bookingFieldIdStr;
-          });
-          
-          if (field) {
-            fieldInfo = {
-              fieldId: bookingFieldIdStr,
-              name: field.name || 'Unknown Field',
-              fieldType: field.fieldType || 'Unknown Type'
-            };
-            fieldName = ` - ${field.name}`;
-          }
+          // Handle string comparison
+          return f._id.toString() === bookingFieldIdStr;
         }
+        return false;
+      });
+      
+      if (field) {
+        fieldInfo = {
+          fieldId: bookingFieldIdStr,
+          name: field.name || 'Unknown Field',
+          fieldType: field.fieldType || 'Unknown Type'
+        };
+        fieldName = ` - ${field.name}`;
+      } else if (typeof booking.fieldId === 'object' && '_id' in booking.fieldId) {
+        // Handle case where fieldId is an object with _id
+        const fieldObj = booking.fieldId as any;
+        fieldInfo = {
+          fieldId: fieldObj._id?.toString() || bookingFieldIdStr,
+          name: fieldObj.name || `Field ID: ${bookingFieldIdStr.substring(0, 8)}`,
+          fieldType: fieldObj.fieldType || 'Unknown Type'
+        };
+        fieldName = ` - ${fieldInfo.name}`;
+      } else if (typeof booking.fieldId === 'string') {
+        // If fieldId is just a string
+        fieldInfo = {
+          fieldId: bookingFieldIdStr,
+          name: 'Field',
+          fieldType: 'Standard'
+        };
+        fieldName = ' - Field';
       }
-    } catch (error) {
-      console.error('Error extracting field information:', error);
     }
 
     // Build invoice items
@@ -219,7 +210,9 @@ export class InvoiceService {
         address: stadium.address?.street || stadium.address?.city || '',
         phone: '', // Stadium model doesn't have a phone field
         ownerId: (stadium.ownerId as mongoose.Types.ObjectId).toString(),
-        ownerName // This can be undefined, which is allowed by the interface
+        ownerName, // This can be undefined, which is allowed by the interface
+        accountNumber: (stadium as any).accountNumber,
+        accountNumberImage: (stadium as any).accountNumberImage
       },
       field: fieldInfo,
       items,

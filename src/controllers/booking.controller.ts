@@ -1103,11 +1103,12 @@ if (
         return;
       }
 
-      // Find the booking and populate all necessary information
+      // Find the booking with optimized population
       const booking = await Booking.findById(bookingId)
         .populate('userId', 'firstName lastName email phone')
         .populate({
           path: 'stadiumId',
+          select: 'name address ownerId fields',
           populate: [
             {
               path: 'ownerId',
@@ -1135,12 +1136,14 @@ if (
         return;
       }
 
-      // Get customer and stadium details (with fields)
-      const customer = await User.findById(booking.userId);
-      const stadium = await Stadium.findById(booking.stadiumId).populate([
-        { path: 'ownerId', select: 'firstName lastName' },
-        { path: 'fields', select: 'name fieldType' }
-      ]);
+      // Get customer and stadium details with optimized queries
+      const customer = await User.findById(booking.userId, 'firstName lastName email phone');
+      const stadium = await Stadium.findById(booking.stadiumId)
+        .select('name address ownerId fields accountNumber accountNumberImage')
+        .populate([
+          { path: 'ownerId', select: 'firstName lastName' },
+          { path: 'fields', select: 'name fieldType' }
+        ]);
 
       if (!customer || !stadium) {
         res.status(404).json({ success: false, message: 'Customer or stadium not found' });

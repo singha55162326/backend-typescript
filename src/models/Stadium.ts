@@ -157,6 +157,9 @@ export interface IStadium extends Document {
   fields?: IField[];
   stats?: IStadiumStats;
   widgetConfig?: IWidgetConfig; // Add this line
+  accountNumber?: string;
+  accountNumberImage?: string;
+  serviceFeePercentage?: number; // Add this line for service fee percentage
 }
 
 const pricingTierSchema = new Schema<IPricingTier>({
@@ -419,6 +422,19 @@ const stadiumSchema: Schema<IStadium> = new mongoose.Schema({
       }
     },
     customMessage: String
+  },
+  accountNumber: String,
+  accountNumberImage: String,
+  serviceFeePercentage: {
+    type: Number,
+    default: 10,
+    enum: [5, 10, 15, 20],
+    validate: {
+      validator: function(v: number) {
+        return [5, 10, 15, 20].includes(v);
+      },
+      message: props => `${props.value} is not a valid service fee percentage! Choose from 5, 10, 15, or 20.`
+    }
   }
 }, {
   timestamps: true

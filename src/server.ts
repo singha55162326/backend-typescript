@@ -28,6 +28,7 @@ import loyaltyRoutes from './routes/loyalty';
 import translationRoutes from './routes/translations';
 import calendarRoutes from './routes/calendar';
 import faqRoutes from './routes/faq';
+import serviceFeeRoutes from './routes/serviceFee';
 
 // import notificationRoutes from './routes/notifications';
 
@@ -116,6 +117,7 @@ app.use('/api/analytics', authenticateToken, authorizeRoles(['superadmin', 'stad
 app.use('/api/translations', translationRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/faq', faqRoutes);
+app.use('/api/service-fee', authenticateToken, authorizeRoles(['superadmin']), serviceFeeRoutes);
 // app.use('/api/notifications', authenticateToken, notificationRoutes);
 // ✅ Serve static files from uploads directory
 
