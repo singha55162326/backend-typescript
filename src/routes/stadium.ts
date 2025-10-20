@@ -178,7 +178,10 @@ router.post(
   [
     authenticateToken,
     authorizeRoles(['stadium_owner', 'superadmin']),
-    uploadStadiumImages.array('images', 5),
+    uploadStadiumImages.fields([
+      { name: 'images', maxCount: 5 },
+      { name: 'bankQRCodeImage', maxCount: 1 }
+    ]),
     body('name').trim().notEmpty().withMessage('Stadium name is required'),
     body('address')
       .trim()
@@ -244,8 +247,9 @@ router.post(
         ownerId = req.user?.userId;
       }
 
-      const files = (req as any).files as Express.Multer.File[] | undefined;
-      const imagePaths = files?.map(file => `/uploads/stadiums/${file.filename}`) || [];
+      const files = (req as any).files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+      const imageFiles = files?.images || [];
+      const imagePaths = imageFiles.map(file => `/uploads/stadiums/${file.filename}`) || [];
 
       // Helper function to parse JSON fields
       const parseField = (fieldName: string, fieldValue: any, required = false): any => {
@@ -316,6 +320,10 @@ router.post(
           fields,
           images: imagePaths,
           status: req.body.status || 'active',
+          // Add bank account fields
+          bankAccountName: req.body.bankAccountName,
+          bankAccountNumber: req.body.bankAccountNumber,
+          bankQRCodeImage: req.body.bankQRCodeImage || (files && files.bankQRCodeImage && files.bankQRCodeImage.length > 0 ? `/uploads/stadiums/${files.bankQRCodeImage[0].filename}` : undefined)
         };
 
         const stadium = new Stadium(stadiumData);
@@ -813,7 +821,10 @@ router.put(
   [
     authenticateToken,
     authorizeRoles(['stadium_owner', 'superadmin']),
-    uploadStadiumImages.array('images', 5), // Limit 5 new images
+    uploadStadiumImages.fields([
+      { name: 'images', maxCount: 5 },
+      { name: 'bankQRCodeImage', maxCount: 1 }
+    ]),
     body('name').optional().trim().notEmpty().withMessage('Name cannot be empty'),
     body('address')
       .optional()
@@ -899,8 +910,9 @@ router.put(
       }
 
       // Handle images
-      const files = (req as any).files as Express.Multer.File[] | undefined;
-      const newImagePaths = files?.map(file => `/uploads/stadiums/${file.filename}`) || [];
+      const files = (req as any).files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+      const imageFiles = files?.images || [];
+      const newImagePaths = imageFiles.map(file => `/uploads/stadiums/${file.filename}`) || [];
       const existingImages = stadium.images || [];
 
       // Handle removed images
@@ -929,6 +941,17 @@ router.put(
       stadium.fields = req.body.fields ? parseField('fields', req.body.fields) : stadium.fields;
       stadium.status = req.body.status || stadium.status;
       stadium.images = finalImages;
+      // Update bank account fields if provided
+      if (req.body.bankAccountName !== undefined) {
+        stadium.bankAccountName = req.body.bankAccountName;
+      }
+      if (req.body.bankAccountNumber !== undefined) {
+        stadium.bankAccountNumber = req.body.bankAccountNumber;
+      }
+      // Handle bank QR code image upload
+      if (files && files.bankQRCodeImage && files.bankQRCodeImage.length > 0) {
+        stadium.bankQRCodeImage = `/uploads/stadiums/${files.bankQRCodeImage[0].filename}`;
+      }
 
       // Update stats if needed
       stadium.stats = {

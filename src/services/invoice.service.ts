@@ -37,6 +37,10 @@ export interface IInvoiceData {
     ownerName?: string; // Keep this optional
     accountNumber?: string;
     accountNumberImage?: string;
+    // Add new bank account fields
+    bankAccountName?: string;
+    bankAccountNumber?: string;
+    bankQRCodeImage?: string;
   };
   field?: { // Add optional field information
     fieldId: string;
@@ -211,8 +215,12 @@ export class InvoiceService {
         phone: '', // Stadium model doesn't have a phone field
         ownerId: (stadium.ownerId as mongoose.Types.ObjectId).toString(),
         ownerName, // This can be undefined, which is allowed by the interface
-        accountNumber: (stadium as any).accountNumber,
-        accountNumberImage: (stadium as any).accountNumberImage
+        accountNumber: stadium.accountNumber,
+        accountNumberImage: stadium.accountNumberImage,
+        // Add new bank account fields
+        bankAccountName: stadium.bankAccountName,
+        bankAccountNumber: stadium.bankAccountNumber,
+        bankQRCodeImage: stadium.bankQRCodeImage
       },
       field: fieldInfo,
       items,

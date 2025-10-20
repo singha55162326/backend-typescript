@@ -15,12 +15,15 @@ import SchedulerService from './utils/scheduler';
 import i18next, { middleware } from './config/i18n'; // Import i18n configuration
 import { setLanguageFromRequest } from './middleware/language.middleware'; // Import language middleware
 import { translationMiddleware } from './middleware/translation.middleware'; // Import translation middleware
+import ClusterService from './cluster';
+import MonitoringService from './services/monitoring.service';
 
 // Import routes
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
 import bookingRoutes from './routes/bookings';
 import stadiumRoutes from './routes/stadium';
+import monitoringRoutes from './routes/monitoring';
 
 import analyticsRoutes from './routes/analytics';
 import reviewRoutes from './routes/reviews';
@@ -28,6 +31,7 @@ import loyaltyRoutes from './routes/loyalty';
 import translationRoutes from './routes/translations';
 import calendarRoutes from './routes/calendar';
 import faqRoutes from './routes/faq';
+import serviceFeeRoutes from './routes/serviceFee'; // ✅ Import service fee routes
 
 // import notificationRoutes from './routes/notifications';
 
@@ -37,125 +41,148 @@ import { errorHandler } from './middleware/errorHandler';
 
 dotenv.config();
 
-const app: Express = express();
+// Get monitoring service instance
+const monitoringService = MonitoringService.getInstance();
 
-// Connect to database
-connectDB();
+const createApp = (): Express => {
+  const app: Express = express();
 
-// Initialize scheduler
-SchedulerService.init();
+  // Connect to database
+  connectDB();
 
-// Initialize i18n middleware
-app.use(middleware.handle(i18next));
+  // Initialize scheduler
+  SchedulerService.init();
 
-// Set language from request (query param or header)
-app.use(setLanguageFromRequest);
+  // Initialize i18n middleware
+  app.use(middleware.handle(i18next));
 
-// Add translation function to request object
-app.use(translationMiddleware);
+  // Set language from request (query param or header)
+  app.use(setLanguageFromRequest);
 
-// Security middleware
-app.use(helmet());
+  // Add translation function to request object
+  app.use(translationMiddleware);
 
-// 👇 FIX: Trust proxy to avoid X-Forwarded-For validation error
-app.set('trust proxy', 1);
-// CORS setup
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://localhost:8080',
-  'https://stadium-booking.netlify.app'
-];
+  // Security middleware
+  app.use(helmet());
 
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  credentials: true
-}));
+  // 👇 FIX: Trust proxy to avoid X-Forwarded-For validation error
+  app.set('trust proxy', 1);
+  // CORS setup
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:8080',
+    'https://stadium-booking.netlify.app'
+  ];
 
-// Handle preflight requests
-app.options('/*splat', cors({
-  origin: allowedOrigins,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  credentials: true
-}));
+  app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    credentials: true
+  }));
 
-
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10000, // 10k requests per 15 minutes (effectively unlimited for normal use)
-  message: { error: 'Too many requests, please try again later.' },
-  standardHeaders: true, // Return rate limit info in headers
-  legacyHeaders: false, // Disable `X-RateLimit-*` headers
-});
-
-app.use('/api', limiter);
-
-// Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Data sanitization
-// app.use(mongoSanitize());
-
-// Compression
-app.use(compression());
-
-// Logging
-app.use(morgan('combined'));
-
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/users', authenticateToken, userRoutes);
-app.use('/api/stadiums', stadiumRoutes);
-app.use('/api/bookings', authenticateToken, bookingRoutes);
-app.use('/api/reviews', reviewRoutes);
-app.use('/api/loyalty', loyaltyRoutes);
-app.use('/api/analytics', authenticateToken, authorizeRoles(['superadmin', 'stadium_owner']), analyticsRoutes);
-app.use('/api/translations', translationRoutes);
-app.use('/api/calendar', calendarRoutes);
-app.use('/api/faq', faqRoutes);
-// app.use('/api/notifications', authenticateToken, notificationRoutes);
-// ✅ Serve static files from uploads directory
+  // Handle preflight requests
+  app.options('/*splat', cors({
+    origin: allowedOrigins,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    credentials: true
+  }));
 
 
-
-// Serve static files from project root's uploads folder
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads'), {
-  setHeaders: (res, _path) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  }
-}));
-
-// Health check
-app.get('/api/health', (_req: Request, res: Response) => {
-  res.json({
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV
+  const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5000, // Reduced from 10k to 5k requests per 15 minutes for better control
+    message: { error: 'Too many requests, please try again later.' },
+    standardHeaders: true, // Return rate limit info in headers
+    legacyHeaders: false, // Disable `X-RateLimit-*` headers
   });
-});
 
-// Setup Swagger documentation
-setupSwagger(app);
+  app.use('/api', limiter);
 
-// Error handling middleware
-app.use(errorHandler);
+  // Body parsing middleware
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// 404 handler
-app.use(/(.*)/, (_req: Request, res: Response) => {
-  res.status(404).json({
-    success: false,
-    message: 'API endpoint not found'
+  // Data sanitization
+  // app.use(mongoSanitize());
+
+  // Compression
+  app.use(compression());
+
+  // Logging with monitoring
+  app.use(morgan('combined', {
+    stream: {
+      write: (message) => {
+        console.log(message.trim());
+      }
+    }
+  }));
+
+  // Add monitoring middleware
+  app.use((req: Request, res: Response, next: Function) => {
+    const start = Date.now();
+    
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      monitoringService.recordRequest(req, res, duration);
+    });
+    
+    next();
   });
-});
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+  // Routes
+  app.use('/api/auth', authRoutes);
+  app.use('/api/users', authenticateToken, userRoutes);
+  app.use('/api/stadiums', stadiumRoutes);
+  app.use('/api/bookings', authenticateToken, bookingRoutes);
+  app.use('/api/reviews', reviewRoutes);
+  app.use('/api/loyalty', loyaltyRoutes);
+  app.use('/api/analytics', authenticateToken, authorizeRoles(['superadmin', 'stadium_owner']), analyticsRoutes);
+  app.use('/api/monitoring', monitoringRoutes);
+  app.use('/api/service-fee', authenticateToken, authorizeRoles(['superadmin']), serviceFeeRoutes); // ✅ Register service fee routes
+  app.use('/api/translations', translationRoutes);
+  app.use('/api/calendar', calendarRoutes);
+  app.use('/api/faq', faqRoutes);
+  // app.use('/api/notifications', authenticateToken, notificationRoutes);
+  // ✅ Serve static files from uploads directory
 
-export default app;
+  // Serve static files from project root's uploads folder
+  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads'), {
+    setHeaders: (res, _path) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    }
+  }));
+
+  // Health check
+  app.get('/api/health', (_req: Request, res: Response) => {
+    const healthStatus = monitoringService.getHealthStatus();
+    res.json({
+      status: 'OK',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      environment: process.env.NODE_ENV,
+      cluster: ClusterService.getClusterInfo(),
+      health: healthStatus
+    });
+  });
+
+  // Setup Swagger documentation
+  setupSwagger(app);
+
+  // Error handling middleware
+  app.use(errorHandler);
+
+  // 404 handler
+  app.use(/(.*)/, (_req: Request, res: Response) => {
+    res.status(404).json({
+      success: false,
+      message: 'API endpoint not found'
+    });
+  });
+
+  return app;
+};
+
+export default createApp;

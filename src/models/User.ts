@@ -55,8 +55,8 @@ const userSchema: Schema<IUser> = new mongoose.Schema({
     unique: true,
     sparse: true,
     lowercase: true,
-    trim: true,
-    index: true
+    trim: true
+    // Removed index: true to prevent duplicate index warning
   },
   passwordHash: {
     type: String,
@@ -159,6 +159,9 @@ userSchema.methods.toJSON = function(): any {
   delete user.passwordHash;
   return user;
 };
+
+// Remove the custom index on _id as it's not allowed
+// MongoDB automatically creates an index on _id and doesn't allow overwriting it
 
 const User: Model<IUser> = mongoose.model<IUser>('User', userSchema);
 

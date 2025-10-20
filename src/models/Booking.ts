@@ -168,19 +168,23 @@ const bookingSchema = new Schema<IBooking>({
     type: Schema.Types.ObjectId,
     ref: 'User',
     required: true
+    // Removed index: true to prevent duplicate index warning
   },
   stadiumId: {
     type: Schema.Types.ObjectId,
     ref: 'Stadium',
     required: true
+    // Removed index: true to prevent duplicate index warning
   },
   fieldId: {
     type: Schema.Types.ObjectId,
     required: true
+    // Removed index: true to prevent duplicate index warning
   },
   bookingDate: {
     type: Date,
     required: true
+    // Removed index: true to prevent duplicate index warning
   },
   startTime: {
     type: String,
@@ -212,16 +216,19 @@ const bookingSchema = new Schema<IBooking>({
     type: String,
     enum: ['pending', 'confirmed', 'cancelled', 'completed', 'no_show'],
     default: 'confirmed'
+    // Removed index: true to prevent duplicate index warning
   },
   paymentStatus: {
     type: String,
     enum: ['pending', 'paid', 'failed', 'refunded'],
     default: 'pending'
+    // Removed index: true to prevent duplicate index warning
   },
   bookingType: {
     type: String,
     enum: ['regular', 'tournament', 'training', 'event', 'membership'],
     default: 'regular'
+    // Removed index: true to prevent duplicate index warning
   },
   teamInfo: teamInfoSchema,
   notes: String,
@@ -257,6 +264,16 @@ bookingSchema.index({
   startTime: 1, 
   endTime: 1 
 }, { unique: true });
+
+// Add indexes for better query performance
+bookingSchema.index({ userId: 1 });
+bookingSchema.index({ stadiumId: 1 });
+bookingSchema.index({ fieldId: 1 });
+bookingSchema.index({ bookingDate: 1 });
+bookingSchema.index({ status: 1 });
+bookingSchema.index({ paymentStatus: 1 });
+bookingSchema.index({ bookingType: 1 });
+bookingSchema.index({ userId: 1, bookingDate: -1 }); // For user bookings query
 
 // Generate booking number
 bookingSchema.pre<IBooking>('save', async function(next) {

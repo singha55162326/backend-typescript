@@ -8,3 +8,4 @@ export { ReviewController } from './review.controller';
 export { LoyaltyController } from './loyalty.controller';
 export { FaqController } from './faq.controller';
 export { FavoriteController } from './favorite.controller';
+export { ServiceFeeController } from './serviceFee.controller'; // ✅ Export ServiceFeeController

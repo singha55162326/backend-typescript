@@ -160,6 +160,10 @@ export interface IStadium extends Document {
   accountNumber?: string;
   accountNumberImage?: string;
   serviceFeePercentage?: number; // Add this line for service fee percentage
+  // Add new fields for bank account information
+  bankAccountName?: string;
+  bankAccountNumber?: string;
+  bankQRCodeImage?: string;
 }
 
 const pricingTierSchema = new Schema<IPricingTier>({
@@ -345,7 +349,9 @@ const stadiumSchema: Schema<IStadium> = new mongoose.Schema({
       required: true
     },
     state: String,
-    country: String,
+    country: {
+      type: String
+    },
     postalCode: String,
     coordinates: {
       type: {
@@ -435,12 +441,16 @@ const stadiumSchema: Schema<IStadium> = new mongoose.Schema({
       },
       message: props => `${props.value} is not a valid service fee percentage! Choose from 5, 10, 15, or 20.`
     }
-  }
+  },
+  // Add new fields for bank account information
+  bankAccountName: String,
+  bankAccountNumber: String,
+  bankQRCodeImage: String
 }, {
   timestamps: true
 });
 
-// Indexes
+// Indexes - removed duplicate indexes and kept only necessary ones
 stadiumSchema.index({ ownerId: 1 });
 stadiumSchema.index({ 'address.coordinates': '2dsphere' });
 stadiumSchema.index({ status: 1 });

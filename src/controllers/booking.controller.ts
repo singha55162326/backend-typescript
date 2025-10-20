@@ -2,8 +2,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { validationResult } from 'express-validator';
 import Booking from '../models/Booking';
+import { IStadium } from '../models/Stadium';
 import Stadium from '../models/Stadium';
-import User from '../models/User';
+import  { IUser } from '../models/User';
+
 import moment from 'moment-timezone';
 import mongoose from 'mongoose';
 import { IPayment } from '../types/booking.types';
@@ -11,6 +13,11 @@ import AvailabilityService from '../utils/availability';
 import { InvoiceService } from '../services/invoice.service';
 import { QRCodeGenerator } from '../utils/qrCodeGenerator';
 import { MembershipService, MembershipBookingParams } from '../services/membership.service';
+import CacheService from '../services/cache.service';
+import MonitoringService from '../services/monitoring.service';
+
+// Get monitoring service instance
+const monitoringService = MonitoringService.getInstance();
 
 export class BookingController {
   /**
@@ -35,8 +42,20 @@ export class BookingController {
         return;
       }
 
-      // Check if stadium and field exist
-      const stadium = await Stadium.findById(stadiumId);
+      // Check if stadium and field exist with caching
+      let stadium = CacheService.getStadium(stadiumId);
+      if (!stadium) {
+        stadium = await Stadium.findById(stadiumId);
+        if (stadium) {
+          CacheService.setStadium(stadiumId, stadium, 300); // Cache for 5 minutes
+          monitoringService.recordCacheMiss();
+        } else {
+          monitoringService.recordCacheMiss();
+        }
+      } else {
+        monitoringService.recordCacheHit();
+      }
+
       if (!stadium) {
         res.status(404).json({
           success: false,
@@ -63,22 +82,33 @@ export class BookingController {
         return;
       }
 
-      // Check availability
-      const existingBooking = await Booking.findOne({
-        fieldId,
-        bookingDate: new Date(bookingDate),
-        $or: [
-          {
-            $and: [
-              { startTime: { $lt: endTime } },
-              { endTime: { $gt: startTime } }
-            ]
-          }
-        ],
-        status: { $in: ['pending', 'confirmed'] }
-      });
+      // Check availability with caching
+      const availabilityCacheKey = `availability:${fieldId}:${bookingDate}`;
+      let isAvailable = CacheService.get<boolean>(availabilityCacheKey);
+      
+      if (isAvailable === undefined) {
+        const existingBooking = await Booking.findOne({
+          fieldId,
+          bookingDate: new Date(bookingDate),
+          $or: [
+            {
+              $and: [
+                { startTime: { $lt: endTime } },
+                { endTime: { $gt: startTime } }
+              ]
+            }
+          ],
+          status: { $in: ['pending', 'confirmed'] }
+        });
+        
+        isAvailable = !existingBooking;
+        CacheService.set(availabilityCacheKey, isAvailable, 60); // Cache for 1 minute
+        monitoringService.recordCacheMiss();
+      } else {
+        monitoringService.recordCacheHit();
+      }
 
-      if (existingBooking) {
+      if (!isAvailable) {
         res.status(400).json({
           success: false,
           message: 'Time slot is already booked'
@@ -134,8 +164,14 @@ export class BookingController {
       const totalRefereeCharges = refereeCharges.reduce((sum: number, charge: any) => sum + charge.total, 0);
       const totalAmount = baseAmount + totalRefereeCharges;
 
+      // Generate booking number without using countDocuments
+      const timestamp = Date.now();
+      const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+      const bookingNumber = `BK${timestamp}${randomSuffix}`;
+
       // Create booking
       const booking = new Booking({
+        bookingNumber,
         userId: new mongoose.Types.ObjectId(req.user?.userId),
         stadiumId,
         fieldId,
@@ -162,6 +198,13 @@ export class BookingController {
       });
 
       await booking.save();
+
+      // Invalidate cache for this field and date
+      CacheService.invalidateAvailability(fieldId, bookingDate);
+      const bookingId = booking.id || (booking as any)._id;
+      if (bookingId) {
+        CacheService.invalidateBooking(bookingId.toString());
+      }
 
       res.status(201).json({
         success: true,
@@ -1093,65 +1136,73 @@ if (
   }
 
   /**
-   * Generate invoice for a booking
+   * Generate invoice data for a booking
    */
   static async generateInvoice(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { bookingId } = req.params;
 
-      if (!mongoose.isValidObjectId(bookingId)) {
-        res.status(400).json({ success: false, message: 'Invalid booking ID' });
+      // Validate booking ID
+      if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid booking ID format'
+        });
         return;
       }
 
-      // Find the booking with optimized population
+      // Find the booking and populate related data with specific fields for performance
       const booking = await Booking.findById(bookingId)
         .populate('userId', 'firstName lastName email phone')
-        .populate({
-          path: 'stadiumId',
-          select: 'name address ownerId fields',
-          populate: [
-            {
-              path: 'ownerId',
-              select: 'firstName lastName'
-            },
-            {
-              path: 'fields',
-              select: 'name fieldType'
-            }
-          ]
-        });
+        .populate('stadiumId', 'name address ownerId ownerName accountNumber accountNumberImage bankAccountName bankAccountNumber bankQRCodeImage fields')
+        .lean({ virtuals: true });
 
       if (!booking) {
-        res.status(404).json({ success: false, message: 'Booking not found' });
+        res.status(404).json({
+          success: false,
+          message: 'Booking not found'
+        });
         return;
       }
 
-      // Authorization: Only owner, stadium owner or admin can generate invoice
-      const isBookingOwner = booking.userId.toString() === req.user?.userId;
-      const isStadiumOwner = (booking.stadiumId as any).ownerId.toString() === req.user?.userId;
-      const isAdmin = req.user?.role === 'superadmin' || req.user?.role === 'stadium_owner';
+      // Check authorization
+      const isOwner = booking.userId && (booking.userId as any)._id.toString() === req.user?.userId;
+      const isSuperAdmin = req.user?.role === 'superadmin';
+      const isStadiumOwner = req.user?.role === 'stadium_owner';
 
-      if (!isBookingOwner && !isStadiumOwner && !isAdmin) {
-        res.status(403).json({ success: false, message: 'Access denied' });
+      // Check if user owns the stadium for this booking
+      let isStadiumOwnerOfBooking = false;
+      if (!isOwner && !isSuperAdmin && !isStadiumOwner) {
+        // Use the populated stadium data if available
+        if (booking.stadiumId && typeof booking.stadiumId === 'object' && '_id' in booking.stadiumId) {
+          const stadium = booking.stadiumId as unknown as IStadium;
+          if (stadium.ownerId.toString() === req.user?.userId) {
+            isStadiumOwnerOfBooking = true;
+          }
+        }
+      }
+
+      if (!isOwner && !isSuperAdmin && !isStadiumOwner && !isStadiumOwnerOfBooking) {
+        res.status(403).json({
+          success: false,
+          message: 'Not authorized to view this booking invoice'
+        });
         return;
       }
 
-      // Get customer and stadium details with optimized queries
-      const customer = await User.findById(booking.userId, 'firstName lastName email phone');
-      const stadium = await Stadium.findById(booking.stadiumId)
-        .select('name address ownerId fields accountNumber accountNumberImage')
-        .populate([
-          { path: 'ownerId', select: 'firstName lastName' },
-          { path: 'fields', select: 'name fieldType' }
-        ]);
+      // Use the populated stadium and user data directly
+      const stadium = booking.stadiumId as unknown as IStadium;
+      const customer = booking.userId as unknown as IUser;
 
-      if (!customer || !stadium) {
-        res.status(404).json({ success: false, message: 'Customer or stadium not found' });
+      if (!stadium || !customer) {
+        res.status(404).json({
+          success: false,
+          message: 'Stadium or customer data not found'
+        });
         return;
       }
 
-      // Generate invoice data
+      // Generate invoice data using the InvoiceService
       const invoiceData = InvoiceService.generateInvoiceData(booking, stadium, customer);
 
       res.json({
