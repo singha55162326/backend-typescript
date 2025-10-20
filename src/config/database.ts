@@ -71,11 +71,15 @@ const createIndexes = async (): Promise<void> => {
     }
 
     // Create indexes with performance optimizations
-    await mongoose.connection.db.collection('stadiums').createIndex({
-      name: 'text',
-      description: 'text',
-      'address.city': 'text'
-    }, { name: 'stadiums_text_index' });
+    try {
+      await mongoose.connection.db.collection('stadiums').createIndex({
+        name: 'text',
+        description: 'text',
+        'address.city': 'text'
+      }, { name: 'stadiums_text_index' });
+    } catch (err) {
+      console.log('ℹ️ Stadiums text index already exists');
+    }
 
     // Drop existing booking datetime index if it exists
     try {
@@ -87,11 +91,15 @@ const createIndexes = async (): Promise<void> => {
     }
 
     // Optimized booking date index
-    await mongoose.connection.db.collection('bookings').createIndex({
-      bookingDate: 1,
-      startTime: 1,
-      endTime: 1
-    }, { name: 'bookings_datetime_index' });
+    try {
+      await mongoose.connection.db.collection('bookings').createIndex({
+        bookingDate: 1,
+        startTime: 1,
+        endTime: 1
+      }, { name: 'bookings_datetime_index' });
+    } catch (err) {
+      console.log('ℹ️ Bookings datetime index already exists');
+    }
 
     // Drop existing availability index if it exists
     try {
@@ -103,21 +111,25 @@ const createIndexes = async (): Promise<void> => {
     }
 
     // Compound index for field availability checking
-    await mongoose.connection.db.collection('bookings').createIndex({
-      stadiumId: 1,
-      fieldId: 1,
-      bookingDate: 1,
-      startTime: 1,
-      endTime: 1,
-      status: 1
-    }, { 
-      name: 'bookings_availability_index',
-      partialFilterExpression: { status: { $in: ['pending', 'confirmed'] } }
-    });
+    try {
+      await mongoose.connection.db.collection('bookings').createIndex({
+        stadiumId: 1,
+        fieldId: 1,
+        bookingDate: 1,
+        startTime: 1,
+        endTime: 1,
+        status: 1
+      }, { 
+        name: 'bookings_availability_index',
+        partialFilterExpression: { status: { $in: ['pending', 'confirmed'] } }
+      });
+    } catch (err) {
+      console.log('ℹ️ Bookings availability index already exists');
+    }
 
     // Drop existing user bookings index if it exists
     try {
-      await mongoose.connection.db.collection('bookings').dropIndex('bookings_user_index');
+      await mongoose.connection.db.collection('bookings').dropIndex('userId_1_bookingDate_-1');
       console.log('🗑️ Dropped existing user bookings index');
     } catch (err) {
       // Index might not exist, that's okay
@@ -125,10 +137,15 @@ const createIndexes = async (): Promise<void> => {
     }
 
     // Index for user bookings
-    await mongoose.connection.db.collection('bookings').createIndex({
-      userId: 1,
-      bookingDate: -1
-    }, { name: 'bookings_user_index' });
+    try {
+      await mongoose.connection.db.collection('bookings').createIndex({
+        userId: 1,
+        bookingDate: -1
+      }, { name: 'bookings_user_index' });
+    } catch (err) {
+      // Index might already exist with a different name
+      console.log('ℹ️ User bookings index already exists');
+    }
 
     // Drop existing geo index if it exists
     try {
@@ -140,9 +157,13 @@ const createIndexes = async (): Promise<void> => {
     }
 
     // Geospatial index for location-based queries
-    await mongoose.connection.db.collection('stadiums').createIndex({
-      'address.coordinates': '2dsphere'
-    }, { name: 'stadiums_geo_index' });
+    try {
+      await mongoose.connection.db.collection('stadiums').createIndex({
+        'address.coordinates': '2dsphere'
+      }, { name: 'stadiums_geo_index' });
+    } catch (err) {
+      console.log('ℹ️ Stadiums geo index already exists');
+    }
 
     // Drop existing analytics index if it exists
     try {
@@ -154,15 +175,19 @@ const createIndexes = async (): Promise<void> => {
     }
 
     // Index for analytics queries
-    await mongoose.connection.db.collection('bookings').createIndex({
-      stadiumId: 1,
-      status: 1,
-      bookingDate: 1
-    }, { name: 'bookings_analytics_index' });
+    try {
+      await mongoose.connection.db.collection('bookings').createIndex({
+        stadiumId: 1,
+        status: 1,
+        bookingDate: 1
+      }, { name: 'bookings_analytics_index' });
+    } catch (err) {
+      console.log('ℹ️ Bookings analytics index already exists');
+    }
 
-    console.log('✅ Database indexes created successfully');
+    console.log('✅ Database indexes processed');
   } catch (error: any) {
-    console.error('❌ Failed to create indexes:', error.message);
+    console.error('❌ Failed to process indexes:', error.message);
   }
 };
 

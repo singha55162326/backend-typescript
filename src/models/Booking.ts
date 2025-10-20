@@ -266,14 +266,13 @@ bookingSchema.index({
 }, { unique: true });
 
 // Add indexes for better query performance
-bookingSchema.index({ userId: 1 });
+// Note: userId index is created manually in database config to avoid conflicts
 bookingSchema.index({ stadiumId: 1 });
 bookingSchema.index({ fieldId: 1 });
 bookingSchema.index({ bookingDate: 1 });
 bookingSchema.index({ status: 1 });
 bookingSchema.index({ paymentStatus: 1 });
 bookingSchema.index({ bookingType: 1 });
-bookingSchema.index({ userId: 1, bookingDate: -1 }); // For user bookings query
 
 // Generate booking number
 bookingSchema.pre<IBooking>('save', async function(next) {

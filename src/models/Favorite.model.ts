@@ -12,8 +12,8 @@ const favoriteSchema: Schema<IFavorite> = new mongoose.Schema(
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
-      index: true
+      required: true
+      // Removed index: true to prevent duplicate index warning
     },
     stadiumId: {
       type: mongoose.Schema.Types.ObjectId,

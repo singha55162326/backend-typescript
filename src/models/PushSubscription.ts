@@ -14,8 +14,8 @@ export interface IPushSubscription extends Document {
 const pushSubscriptionSchema: Schema<IPushSubscription> = new mongoose.Schema({
   userId: {
     type: String,
-    required: true,
-    index: true
+    required: true
+    // Removed index: true to prevent duplicate index warning
   },
   endpoint: {
     type: String,
