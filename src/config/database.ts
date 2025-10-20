@@ -1,5 +1,4 @@
 import mongoose from 'mongoose';
-import MonitoringService from '../services/monitoring.service';
 
 const connectDB = async (): Promise<void> => {
   try {
@@ -30,9 +29,7 @@ const connectDB = async (): Promise<void> => {
     await createIndexes();
     
     // Update monitoring service with connection info
-    const monitoringService = MonitoringService.getInstance();
-    monitoringService.getDatabaseMetrics(); // Initialize database metrics tracking
-    
+  
   } catch (error: any) {
     console.error('❌ Database connection error:', error.message);
     

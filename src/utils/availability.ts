@@ -1,11 +1,6 @@
 import moment from 'moment-timezone';
 import Booking from '../models/Booking';
 import { IField } from '../models/Stadium';
-import CacheService from '../services/cache.service';
-import MonitoringService from '../services/monitoring.service';
-
-// Get monitoring service instance
-const monitoringService = MonitoringService.getInstance();
 
 interface ITimeSlot {
   startTime: string;
@@ -78,19 +73,9 @@ class AvailabilityService {
     date: string,
     field: IField
   ): Promise<ITimeSlot[]> {
-    // Check cache first
-    const cacheKey = `available_slots:${fieldId}:${date}`;
-    let availableSlots = CacheService.get<ITimeSlot[]>(cacheKey);
-    
-    if (availableSlots) {
-      monitoringService.recordCacheHit();
-      return availableSlots;
-    }
-    
-    monitoringService.recordCacheMiss();
+    const availableSlots: ITimeSlot[] = [];
 
     const dayOfWeek = moment(date).day();
-    availableSlots = [];
 
     // Get regular schedule for the day
     const daySchedule = field.availabilitySchedule?.find((schedule: { dayOfWeek: number; }) => 
@@ -98,8 +83,6 @@ class AvailabilityService {
     );
 
     if (!daySchedule) {
-      // Cache empty result
-      CacheService.set(cacheKey, availableSlots, 300); // Cache for 5 minutes
       return availableSlots;
     }
 
@@ -135,9 +118,6 @@ class AvailabilityService {
       }
     }
 
-    // Cache the result
-    CacheService.set(cacheKey, availableSlots, 300); // Cache for 5 minutes
-    
     return availableSlots;
   }
 
@@ -154,25 +134,6 @@ class AvailabilityService {
       unavailableCount: number;
     };
   }> {
-    // Check cache first
-    const cacheKey = `comprehensive_availability:${fieldId}:${date}`;
-    const cachedResult = CacheService.get<{
-      availableSlots: ITimeSlot[];
-      unavailableSlots: IUnavailableSlot[];
-      summary: {
-        totalSlots: number;
-        availableCount: number;
-        unavailableCount: number;
-      };
-    }>(cacheKey);
-    
-    if (cachedResult) {
-      monitoringService.recordCacheHit();
-      return cachedResult;
-    }
-    
-    monitoringService.recordCacheMiss();
-
     const dayOfWeek = moment(date).day();
     const availableSlots: ITimeSlot[] = [];
     const unavailableSlots: IUnavailableSlot[] = [];
@@ -183,7 +144,7 @@ class AvailabilityService {
     );
 
     if (!daySchedule) {
-      const result = {
+      return {
         availableSlots: [],
         unavailableSlots: [],
         summary: {
@@ -192,10 +153,6 @@ class AvailabilityService {
           unavailableCount: 0
         }
       };
-      
-      // Cache empty result
-      CacheService.set(cacheKey, result, 300); // Cache for 5 minutes
-      return result;
     }
 
     // Check for special dates
@@ -261,9 +218,6 @@ class AvailabilityService {
       }
     };
 
-    // Cache the result
-    CacheService.set(cacheKey, result, 300); // Cache for 5 minutes
-    
     return result;
   }
 

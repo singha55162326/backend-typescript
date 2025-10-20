@@ -13,11 +13,6 @@ import AvailabilityService from '../utils/availability';
 import { InvoiceService } from '../services/invoice.service';
 import { QRCodeGenerator } from '../utils/qrCodeGenerator';
 import { MembershipService, MembershipBookingParams } from '../services/membership.service';
-import CacheService from '../services/cache.service';
-import MonitoringService from '../services/monitoring.service';
-
-// Get monitoring service instance
-const monitoringService = MonitoringService.getInstance();
 
 export class BookingController {
   /**
@@ -42,19 +37,8 @@ export class BookingController {
         return;
       }
 
-      // Check if stadium and field exist with caching
-      let stadium = CacheService.getStadium(stadiumId);
-      if (!stadium) {
-        stadium = await Stadium.findById(stadiumId);
-        if (stadium) {
-          CacheService.setStadium(stadiumId, stadium, 300); // Cache for 5 minutes
-          monitoringService.recordCacheMiss();
-        } else {
-          monitoringService.recordCacheMiss();
-        }
-      } else {
-        monitoringService.recordCacheHit();
-      }
+      // Check if stadium and field exist
+      const stadium = await Stadium.findById(stadiumId);
 
       if (!stadium) {
         res.status(404).json({
@@ -82,31 +66,22 @@ export class BookingController {
         return;
       }
 
-      // Check availability with caching
-      const availabilityCacheKey = `availability:${fieldId}:${bookingDate}`;
-      let isAvailable = CacheService.get<boolean>(availabilityCacheKey);
-      
-      if (isAvailable === undefined) {
-        const existingBooking = await Booking.findOne({
-          fieldId,
-          bookingDate: new Date(bookingDate),
-          $or: [
-            {
-              $and: [
-                { startTime: { $lt: endTime } },
-                { endTime: { $gt: startTime } }
-              ]
-            }
-          ],
-          status: { $in: ['pending', 'confirmed'] }
-        });
-        
-        isAvailable = !existingBooking;
-        CacheService.set(availabilityCacheKey, isAvailable, 60); // Cache for 1 minute
-        monitoringService.recordCacheMiss();
-      } else {
-        monitoringService.recordCacheHit();
-      }
+      // Check availability
+      const existingBooking = await Booking.findOne({
+        fieldId,
+        bookingDate: new Date(bookingDate),
+        $or: [
+          {
+            $and: [
+              { startTime: { $lt: endTime } },
+              { endTime: { $gt: startTime } }
+            ]
+          }
+        ],
+        status: { $in: ['pending', 'confirmed'] }
+      });
+
+      const isAvailable = !existingBooking;
 
       if (!isAvailable) {
         res.status(400).json({
@@ -198,13 +173,6 @@ export class BookingController {
       });
 
       await booking.save();
-
-      // Invalidate cache for this field and date
-      CacheService.invalidateAvailability(fieldId, bookingDate);
-      const bookingId = booking.id || (booking as any)._id;
-      if (bookingId) {
-        CacheService.invalidateBooking(bookingId.toString());
-      }
 
       res.status(201).json({
         success: true,
@@ -993,8 +961,8 @@ if (
       }
 
       if (field.status !== 'active') {
-        res.status(400).json({
-          success: false,
+        res.json({
+          success: true,
           message: `Field is currently ${field.status}`,
           data: {
             fieldStatus: field.status,

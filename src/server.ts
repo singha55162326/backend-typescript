@@ -16,14 +16,12 @@ import i18next, { middleware } from './config/i18n'; // Import i18n configuratio
 import { setLanguageFromRequest } from './middleware/language.middleware'; // Import language middleware
 import { translationMiddleware } from './middleware/translation.middleware'; // Import translation middleware
 import ClusterService from './cluster';
-import MonitoringService from './services/monitoring.service';
 
 // Import routes
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
 import bookingRoutes from './routes/bookings';
 import stadiumRoutes from './routes/stadium';
-import monitoringRoutes from './routes/monitoring';
 
 import analyticsRoutes from './routes/analytics';
 import reviewRoutes from './routes/reviews';
@@ -33,16 +31,11 @@ import calendarRoutes from './routes/calendar';
 import faqRoutes from './routes/faq';
 import serviceFeeRoutes from './routes/serviceFee'; // ✅ Import service fee routes
 
-// import notificationRoutes from './routes/notifications';
-
 // Import middleware
 import { authenticateToken, authorizeRoles } from './middleware/auth';
 import { errorHandler } from './middleware/errorHandler';
 
 dotenv.config();
-
-// Get monitoring service instance
-const monitoringService = MonitoringService.getInstance();
 
 const createApp = (): Express => {
   const app: Express = express();
@@ -110,7 +103,7 @@ const createApp = (): Express => {
   // Compression
   app.use(compression());
 
-  // Logging with monitoring
+  // Logging
   app.use(morgan('combined', {
     stream: {
       write: (message) => {
@@ -118,18 +111,6 @@ const createApp = (): Express => {
       }
     }
   }));
-
-  // Add monitoring middleware
-  app.use((req: Request, res: Response, next: Function) => {
-    const start = Date.now();
-    
-    res.on('finish', () => {
-      const duration = Date.now() - start;
-      monitoringService.recordRequest(req, res, duration);
-    });
-    
-    next();
-  });
 
   // Routes
   app.use('/api/auth', authRoutes);
@@ -139,7 +120,6 @@ const createApp = (): Express => {
   app.use('/api/reviews', reviewRoutes);
   app.use('/api/loyalty', loyaltyRoutes);
   app.use('/api/analytics', authenticateToken, authorizeRoles(['superadmin', 'stadium_owner']), analyticsRoutes);
-  app.use('/api/monitoring', monitoringRoutes);
   app.use('/api/service-fee', authenticateToken, authorizeRoles(['superadmin']), serviceFeeRoutes); // ✅ Register service fee routes
   app.use('/api/translations', translationRoutes);
   app.use('/api/calendar', calendarRoutes);
@@ -157,14 +137,12 @@ const createApp = (): Express => {
 
   // Health check
   app.get('/api/health', (_req: Request, res: Response) => {
-    const healthStatus = monitoringService.getHealthStatus();
     res.json({
       status: 'OK',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       environment: process.env.NODE_ENV,
-      cluster: ClusterService.getClusterInfo(),
-      health: healthStatus
+      cluster: ClusterService.getClusterInfo()
     });
   });
 
