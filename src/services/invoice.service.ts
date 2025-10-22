@@ -60,6 +60,11 @@ export interface IInvoiceData {
     accountName?: string;
   };
   notes?: string;
+  // Add QR code dimensions for proper 80mm layout
+  qrCodeDimensions?: {
+    width: number;
+    height: number;
+  };
 }
 
 export class InvoiceService {
@@ -230,7 +235,12 @@ export class InvoiceService {
       currency: booking.pricing.currency || 'LAK',
       paymentStatus: booking.paymentStatus,
       qrCodePayment, // Include QR code payment information
-      notes: booking.notes || ''
+      notes: booking.notes || '',
+      // Add QR code dimensions for proper 80mm layout
+      qrCodeDimensions: {
+        width: 192, // 192px = 68mm at 72 DPI, suitable for 80mm receipt
+        height: 192
+      }
     };
   }
 }

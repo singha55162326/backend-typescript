@@ -30,6 +30,7 @@ import translationRoutes from './routes/translations';
 import calendarRoutes from './routes/calendar';
 import faqRoutes from './routes/faq';
 import serviceFeeRoutes from './routes/serviceFee'; // ✅ Import service fee routes
+import invoiceRoutes from './routes/invoices'; // ✅ Import invoice routes
 
 // Import middleware
 import { authenticateToken, authorizeRoles } from './middleware/auth';
@@ -121,6 +122,7 @@ const createApp = (): Express => {
   app.use('/api/loyalty', loyaltyRoutes);
   app.use('/api/analytics', authenticateToken, authorizeRoles(['superadmin', 'stadium_owner']), analyticsRoutes);
   app.use('/api/service-fee', authenticateToken, authorizeRoles(['superadmin']), serviceFeeRoutes); // ✅ Register service fee routes
+  app.use('/api/invoices', authenticateToken, invoiceRoutes); // ✅ Register invoice routes
   app.use('/api/translations', translationRoutes);
   app.use('/api/calendar', calendarRoutes);
   app.use('/api/faq', faqRoutes);

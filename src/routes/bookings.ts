@@ -1323,6 +1323,60 @@ router.get('/field/:stadiumId/:fieldId/availability', [
  */
 router.get('/:bookingId/invoice', authenticateToken, BookingController.generateInvoice);
 
+/**
+ * @swagger
+ * /api/bookings/{bookingId}/send-invoice:
+ *   post:
+ *     summary: Send invoice via email
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: bookingId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Booking ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: Recipient email address
+ *     responses:
+ *       200:
+ *         description: Invoice sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: Invalid booking ID or email
+ *       403:
+ *         description: Access denied
+ *       404:
+ *         description: Booking not found
+ *       500:
+ *         description: Failed to send invoice
+ */
+router.post('/:bookingId/send-invoice', [
+  authenticateToken,
+  body('email').isEmail().withMessage('Valid email is required')
+], BookingController.sendInvoiceEmail);
+
 router.get('/field/:stadiumId/:fieldId/check-slot', [
   query('date').notEmpty().isISO8601(),
   query('startTime').matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),

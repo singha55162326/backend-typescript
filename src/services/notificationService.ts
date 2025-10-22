@@ -48,7 +48,7 @@ class NotificationService {
       `;
 
       await this.emailTransporter.sendMail({
-        from: process.env.FROM_EMAIL,
+        from: process.env.FROM_EMAIL || process.env.SMTP_USER,
         to: user.email,
         subject: 'Booking Confirmation - ' + booking.bookingNumber,
         text: emailContent
@@ -90,7 +90,7 @@ class NotificationService {
       `;
 
       await this.emailTransporter.sendMail({
-        from: process.env.FROM_EMAIL,
+        from: process.env.FROM_EMAIL || process.env.SMTP_USER,
         to: user.email,
         subject: 'Booking Reminder - ' + booking.bookingNumber,
         text: emailContent
@@ -99,6 +99,80 @@ class NotificationService {
       console.log(`Reminder email sent to ${user.email}`);
     } catch (error) {
       console.error('Failed to send reminder email:', error);
+    }
+  }
+
+  async sendInvoiceEmail(booking: any, invoiceData: any, recipientEmail: string): Promise<void> {
+    try {
+      const user = await User.findById(booking.userId);
+      const stadium = await Stadium.findById(booking.stadiumId);
+      
+      if (!user || !stadium) return;
+
+      // Create a simple text version of the invoice
+      let invoiceText = `
+Invoice Details:
+================
+Invoice Number: ${invoiceData.invoiceNumber}
+Invoice Date: ${moment(invoiceData.invoiceDate).format('YYYY-MM-DD HH:mm')}
+Due Date: ${moment(invoiceData.dueDate).format('YYYY-MM-DD')}
+
+Booking Information:
+- Booking Number: ${invoiceData.booking.bookingNumber}
+- Stadium: ${stadium.name}
+- Field: ${invoiceData.field?.name || 'N/A'}
+- Date: ${moment(invoiceData.booking.bookingDate).format('YYYY-MM-DD')}
+- Time: ${invoiceData.booking.startTime} - ${invoiceData.booking.endTime}
+- Duration: ${invoiceData.booking.durationHours} hours
+
+Customer Information:
+- Name: ${user.firstName} ${user.lastName}
+- Email: ${user.email}
+- Phone: ${user.phone || 'N/A'}
+
+Items:
+`;
+
+      invoiceData.items.forEach((item: any, index: number) => {
+        invoiceText += `${index + 1}. ${item.description}
+   Quantity: ${item.quantity}
+   Unit Price: ${invoiceData.currency} ${item.unitPrice.toFixed(2)}
+   Total: ${invoiceData.currency} ${item.total.toFixed(2)}
+`;
+      });
+
+      invoiceText += `
+Subtotal: ${invoiceData.currency} ${invoiceData.subtotal.toFixed(2)}
+Taxes: ${invoiceData.currency} ${invoiceData.taxes.toFixed(2)}
+Total Amount: ${invoiceData.currency} ${invoiceData.totalAmount.toFixed(2)}
+
+Payment Status: ${invoiceData.paymentStatus.charAt(0).toUpperCase() + invoiceData.paymentStatus.slice(1)}
+
+`;
+
+      if (invoiceData.stadium.bankAccountName || invoiceData.stadium.bankAccountNumber) {
+        invoiceText += `Bank Account Information:
+- Account Name: ${invoiceData.stadium.bankAccountName || 'N/A'}
+- Account Number: ${invoiceData.stadium.bankAccountNumber || 'N/A'}
+`;
+      }
+
+      invoiceText += `
+Thank you for your booking!
+Please keep this invoice for your records.
+`;
+
+      await this.emailTransporter.sendMail({
+        from: process.env.FROM_EMAIL || process.env.SMTP_USER,
+        to: recipientEmail,
+        subject: `Invoice - ${invoiceData.invoiceNumber} for Booking ${invoiceData.booking.bookingNumber}`,
+        text: invoiceText
+      });
+
+      console.log(`Invoice email sent to ${recipientEmail}`);
+    } catch (error) {
+      console.error('Failed to send invoice email:', error);
+      throw error;
     }
   }
 }

@@ -2,9 +2,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { validationResult } from 'express-validator';
 import Booking from '../models/Booking';
-import { IStadium } from '../models/Stadium';
+
 import Stadium from '../models/Stadium';
-import  { IUser } from '../models/User';
+
 
 import moment from 'moment-timezone';
 import mongoose from 'mongoose';
@@ -1119,11 +1119,11 @@ if (
         return;
       }
 
-      // Find the booking and populate related data with specific fields for performance
+      // Find the booking with populated references
       const booking = await Booking.findById(bookingId)
         .populate('userId', 'firstName lastName email phone')
-        .populate('stadiumId', 'name address ownerId ownerName accountNumber accountNumberImage bankAccountName bankAccountNumber bankQRCodeImage fields')
-        .lean({ virtuals: true });
+        .populate('stadiumId')
+        .lean();
 
       if (!booking) {
         res.status(404).json({
@@ -1133,41 +1133,40 @@ if (
         return;
       }
 
-      // Check authorization
-      const isOwner = booking.userId && (booking.userId as any)._id.toString() === req.user?.userId;
+      // Check authorization - only booking owner, stadium owner, or superadmin can generate invoice
+      const isOwner = booking.userId && 
+        typeof booking.userId === 'object' && 
+        '_id' in booking.userId && 
+        (booking.userId as any)._id.toString() === req.user?.userId;
+        
       const isSuperAdmin = req.user?.role === 'superadmin';
-      const isStadiumOwner = req.user?.role === 'stadium_owner';
-
-      // Check if user owns the stadium for this booking
-      let isStadiumOwnerOfBooking = false;
-      if (!isOwner && !isSuperAdmin && !isStadiumOwner) {
-        // Use the populated stadium data if available
-        if (booking.stadiumId && typeof booking.stadiumId === 'object' && '_id' in booking.stadiumId) {
-          const stadium = booking.stadiumId as unknown as IStadium;
-          if (stadium.ownerId.toString() === req.user?.userId) {
-            isStadiumOwnerOfBooking = true;
-          }
+      
+      let isStadiumOwner = false;
+      if (booking.stadiumId && typeof booking.stadiumId === 'object' && '_id' in booking.stadiumId) {
+        const stadium = booking.stadiumId as any;
+        if (stadium.ownerId) {
+          isStadiumOwner = stadium.ownerId.toString() === req.user?.userId;
         }
       }
 
-      if (!isOwner && !isSuperAdmin && !isStadiumOwner && !isStadiumOwnerOfBooking) {
+      if (!isOwner && !isSuperAdmin && !isStadiumOwner) {
         res.status(403).json({
           success: false,
-          message: 'Not authorized to view this booking invoice'
+          message: 'Not authorized to generate invoice for this booking'
         });
         return;
       }
 
-      // Use the populated stadium and user data directly
-      const stadium = booking.stadiumId as unknown as IStadium;
-      const customer = booking.userId as unknown as IUser;
+      // Get customer data
+      let customer = null;
+      if (booking.userId && typeof booking.userId === 'object' && '_id' in booking.userId) {
+        customer = booking.userId as any;
+      }
 
-      if (!stadium || !customer) {
-        res.status(404).json({
-          success: false,
-          message: 'Stadium or customer data not found'
-        });
-        return;
+      // Get stadium data
+      let stadium = null;
+      if (booking.stadiumId && typeof booking.stadiumId === 'object' && '_id' in booking.stadiumId) {
+        stadium = booking.stadiumId as any;
       }
 
       // Generate invoice data using the InvoiceService
@@ -1176,6 +1175,98 @@ if (
       res.json({
         success: true,
         data: invoiceData
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Send invoice via email
+   */
+  static async sendInvoiceEmail(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { bookingId } = req.params;
+      const { email } = req.body;
+      const errors = validationResult(req);
+      
+      if (!errors.isEmpty()) {
+        res.status(400).json({
+          success: false,
+          errors: errors.array()
+        });
+        return;
+      }
+
+      // Validate booking ID
+      if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid booking ID format'
+        });
+        return;
+      }
+
+      // Find the booking with populated references
+      const booking = await Booking.findById(bookingId)
+        .populate('userId', 'firstName lastName email phone')
+        .populate('stadiumId')
+        .lean();
+
+      if (!booking) {
+        res.status(404).json({
+          success: false,
+          message: 'Booking not found'
+        });
+        return;
+      }
+
+      // Check authorization - only booking owner, stadium owner, or superadmin can send invoice
+      const isOwner = booking.userId && 
+        typeof booking.userId === 'object' && 
+        '_id' in booking.userId && 
+        (booking.userId as any)._id.toString() === req.user?.userId;
+        
+      const isSuperAdmin = req.user?.role === 'superadmin';
+      
+      let isStadiumOwner = false;
+      if (booking.stadiumId && typeof booking.stadiumId === 'object' && '_id' in booking.stadiumId) {
+        const stadium = booking.stadiumId as any;
+        if (stadium.ownerId) {
+          isStadiumOwner = stadium.ownerId.toString() === req.user?.userId;
+        }
+      }
+
+      if (!isOwner && !isSuperAdmin && !isStadiumOwner) {
+        res.status(403).json({
+          success: false,
+          message: 'Not authorized to send invoice for this booking'
+        });
+        return;
+      }
+
+      // Get customer data
+      let customer = null;
+      if (booking.userId && typeof booking.userId === 'object' && '_id' in booking.userId) {
+        customer = booking.userId as any;
+      }
+
+      // Get stadium data
+      let stadium = null;
+      if (booking.stadiumId && typeof booking.stadiumId === 'object' && '_id' in booking.stadiumId) {
+        stadium = booking.stadiumId as any;
+      }
+
+      // Generate invoice data using the InvoiceService
+      const invoiceData = InvoiceService.generateInvoiceData(booking, stadium, customer);
+
+      // Send invoice via email
+      const notificationService = require('../services/notificationService').default;
+      await notificationService.sendInvoiceEmail(booking, invoiceData, email);
+
+      res.json({
+        success: true,
+        message: 'Invoice sent successfully to ' + email
       });
     } catch (error) {
       next(error);
