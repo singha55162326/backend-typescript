@@ -1,23 +1,25 @@
-import ClusterService from './cluster';
 import createApp from './server';
-import dotenv from 'dotenv';
-
-dotenv.config();
+// dotenv import removed as it's loaded in config/env.ts
 
 const PORT = process.env.PORT || 5000;
 
-// Start server with clustering in production
-if (process.env.NODE_ENV === 'production') {
-  ClusterService.run(() => {
-    const app = createApp();
-    app.listen(PORT, () => {
-      console.log(`Server worker ${process.pid} running on port ${PORT}`);
-    });
+// Development mode - single process
+const app = createApp();
+const server = app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+});
+
+// Handle graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  server.close(() => {
+    console.log('Process terminated');
   });
-} else {
-  // Development mode - single process
-  const app = createApp();
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down gracefully');
+  server.close(() => {
+    console.log('Process terminated');
   });
-}
+});

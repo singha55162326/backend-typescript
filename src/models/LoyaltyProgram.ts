@@ -69,6 +69,7 @@ const loyaltyProgramSchema = new Schema<ILoyaltyProgram>({
     ref: 'User',
     required: true,
     unique: true
+    // Removed separate index as unique: true already creates an index
   },
   totalPoints: {
     type: Number,
@@ -116,8 +117,7 @@ export const LOYALTY_TIERS: ILoyaltyTier[] = [
   }
 ];
 
-// Index for efficient querying
-loyaltyProgramSchema.index({ userId: 1 });
+// Index for efficient querying by points (userId already indexed by unique: true)
 loyaltyProgramSchema.index({ totalPoints: -1 });
 
 const LoyaltyProgram: Model<ILoyaltyProgram> = mongoose.model<ILoyaltyProgram>('LoyaltyProgram', loyaltyProgramSchema);

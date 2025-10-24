@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "nodemon src/index.ts",
+    "dev": "nodemon",
     "dev:ts": "ts-node src/index.ts",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -18,7 +18,9 @@
     "seed": "ts-node src/scripts/seedDatabase.ts",
     "docker:build": "docker build -t stadium-booking-api .",
     "docker:run": "docker run -p 5000:5000 stadium-booking-api",
-    "load-test": "node load-test.js"
+    "load-test": "node load-test.js",
+    "test-server": "ts-node src/test-server.ts",
+    "test-email": "node test-email.js"
   },
   "keywords": [],
   "author": "",

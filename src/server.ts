@@ -15,7 +15,7 @@ import SchedulerService from './utils/scheduler';
 import i18next, { middleware } from './config/i18n'; // Import i18n configuration
 import { setLanguageFromRequest } from './middleware/language.middleware'; // Import language middleware
 import { translationMiddleware } from './middleware/translation.middleware'; // Import translation middleware
-import ClusterService from './cluster';
+
 
 // Import routes
 import authRoutes from './routes/auth';
@@ -31,6 +31,7 @@ import calendarRoutes from './routes/calendar';
 import faqRoutes from './routes/faq';
 import serviceFeeRoutes from './routes/serviceFee'; // ✅ Import service fee routes
 import invoiceRoutes from './routes/invoices'; // ✅ Import invoice routes
+import emailTestRoutes from './routes/email-test';
 
 // Import middleware
 import { authenticateToken, authorizeRoles } from './middleware/auth';
@@ -126,6 +127,7 @@ const createApp = (): Express => {
   app.use('/api/translations', translationRoutes);
   app.use('/api/calendar', calendarRoutes);
   app.use('/api/faq', faqRoutes);
+  app.use('/api/email', emailTestRoutes);
   // app.use('/api/notifications', authenticateToken, notificationRoutes);
   // ✅ Serve static files from uploads directory
 
@@ -144,7 +146,7 @@ const createApp = (): Express => {
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       environment: process.env.NODE_ENV,
-      cluster: ClusterService.getClusterInfo()
+    
     });
   });
 

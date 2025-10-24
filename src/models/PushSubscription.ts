@@ -21,6 +21,7 @@ const pushSubscriptionSchema: Schema<IPushSubscription> = new mongoose.Schema({
     type: String,
     required: true,
     unique: true
+    // Removed separate index as unique: true already creates an index
   },
   keys: {
     p256dh: {
@@ -36,9 +37,8 @@ const pushSubscriptionSchema: Schema<IPushSubscription> = new mongoose.Schema({
   timestamps: true
 });
 
-// Index for efficient querying
+// Index for efficient querying (endpoint already indexed by unique: true)
 pushSubscriptionSchema.index({ userId: 1 });
-pushSubscriptionSchema.index({ endpoint: 1 });
 
 const PushSubscription: Model<IPushSubscription> = mongoose.model<IPushSubscription>('PushSubscription', pushSubscriptionSchema);
 
