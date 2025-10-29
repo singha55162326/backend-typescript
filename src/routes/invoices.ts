@@ -183,4 +183,38 @@ router.get('/stadium-owner-history', authenticateToken, authorizeRoles(['stadium
  */
 router.get('/admin-history', authenticateToken, authorizeRoles(['superadmin']), InvoiceController.getAdminInvoiceHistory);
 
+/**
+ * @swagger
+ * /api/invoices/{bookingId}/download-pdf:
+ *   get:
+ *     summary: Download invoice as PDF
+ *     tags: [Invoices]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: bookingId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Booking ID
+ *     responses:
+ *       200:
+ *         description: PDF invoice downloaded successfully
+ *         content:
+ *           application/pdf:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       400:
+ *         description: Invalid booking ID
+ *       403:
+ *         description: Access denied
+ *       404:
+ *         description: Booking not found
+ *       500:
+ *         description: Failed to generate PDF
+ */
+router.get('/:bookingId/download-pdf', authenticateToken, InvoiceController.downloadInvoicePDF);
+
 export default router;
