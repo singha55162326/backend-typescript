@@ -32,6 +32,7 @@ import faqRoutes from './routes/faq';
 import serviceFeeRoutes from './routes/serviceFee'; // ✅ Import service fee routes
 import invoiceRoutes from './routes/invoices'; // ✅ Import invoice routes
 import emailTestRoutes from './routes/email-test';
+import favoriteRoutes from './routes/favorite'
 
 // Import middleware
 import { authenticateToken, authorizeRoles } from './middleware/auth';
@@ -128,6 +129,7 @@ const createApp = (): Express => {
   app.use('/api/calendar', calendarRoutes);
   app.use('/api/faq', faqRoutes);
   app.use('/api/email', emailTestRoutes);
+  app.use('/api/favorite/stadium', authenticateToken, favoriteRoutes);
   // app.use('/api/notifications', authenticateToken, notificationRoutes);
   // ✅ Serve static files from uploads directory
 
