@@ -805,8 +805,8 @@ if (
         return;
       }
 
-      if (req.user?.role !== 'admin' && req.user?.role !== 'superadmin') {
-        res.status(403).json({ success: false, message: 'Only admins can assign staff' });
+      if (req.user?.role !== 'admin' && req.user?.role !== 'superadmin' && req.user?.role !== 'stadium_owner') {
+        res.status(403).json({ success: false, message: 'Only admins and stadium owners can assign staff' });
         return;
       }
 
@@ -859,8 +859,8 @@ if (
         return;
       }
 
-      if (req.user?.role !== 'admin' && req.user?.role !== 'superadmin') {
-        res.status(403).json({ success: false, message: 'Only admins can apply discounts' });
+      if (req.user?.role !== 'admin' && req.user?.role !== 'superadmin' && req.user?.role !== 'stadium_owner') {
+        res.status(403).json({ success: false, message: 'Only admins and stadium owners can apply discounts' });
         return;
       }
 

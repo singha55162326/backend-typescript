@@ -50,6 +50,174 @@ router.get('/detailed', authenticateToken, authorizeRoles(['superadmin', 'stadiu
 
 /**
  * @swagger
+ * /api/analytics/predictive:
+ *   get:
+ *     summary: Get predictive analytics for booking trends
+ *     tags: [Analytics]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Start date for analytics period
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: End date for analytics period
+ */
+router.get('/predictive', authenticateToken, authorizeRoles(['superadmin']), AnalyticsController.getPredictiveAnalytics);
+
+/**
+ * @swagger
+ * /api/analytics/segmentation:
+ *   get:
+ *     summary: Get customer segmentation data
+ *     tags: [Analytics]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Start date for analytics period
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: End date for analytics period
+ */
+router.get('/segmentation', authenticateToken, authorizeRoles(['superadmin']), AnalyticsController.getCustomerSegmentation);
+
+/**
+ * @swagger
+ * /api/analytics/projections:
+ *   get:
+ *     summary: Get revenue projections
+ *     tags: [Analytics]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Start date for analytics period
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: End date for analytics period
+ */
+router.get('/projections', authenticateToken, authorizeRoles(['superadmin', 'stadium_owner']), AnalyticsController.getRevenueProjections);
+
+/**
+ * @swagger
+ * /api/analytics/staff-scheduling/{stadiumId}:
+ *   get:
+ *     summary: Get staff scheduling data for a stadium
+ *     tags: [Analytics]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: stadiumId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Stadium ID
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Start date for scheduling period
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: End date for scheduling period
+ */
+router.get('/staff-scheduling/:stadiumId', authenticateToken, authorizeRoles(['superadmin', 'stadium_owner']), AnalyticsController.getStaffScheduling);
+
+/**
+ * @swagger
+ * /api/analytics/staff-performance/{stadiumId}:
+ *   get:
+ *     summary: Get staff performance metrics for a stadium
+ *     tags: [Analytics]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: stadiumId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Stadium ID
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Start date for performance period
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: End date for performance period
+ */
+router.get('/staff-performance/:stadiumId', authenticateToken, authorizeRoles(['superadmin', 'stadium_owner']), AnalyticsController.getStaffPerformanceMetrics);
+
+/**
+ * @swagger
+ * /api/analytics/payroll/{stadiumId}:
+ *   get:
+ *     summary: Get staff payroll data for a stadium
+ *     tags: [Analytics]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: stadiumId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Stadium ID
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Start date for payroll period
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: End date for payroll period
+ *       - in: query
+ *         name: format
+ *         schema:
+ *           type: string
+ *           enum: [json, csv]
+ *         description: Response format
+ */
+router.get('/payroll/:stadiumId', authenticateToken, authorizeRoles(['superadmin', 'stadium_owner']), AnalyticsController.getStaffPayroll);
+
+/**
+ * @swagger
  * /api/analytics/export:
  *   get:
  *     summary: Export analytics data
